@@ -5,7 +5,14 @@ use std::cmp::*;
 use std::f64::NAN;
 use std::f64::INFINITY;
 use std::f64::NEG_INFINITY;
+use std::sync::PoisonError;
 use std::time::Instant;
+
+use regex::Regex;
+use regex::RegexSet;
+use lazy_static::lazy_static;
+use std::sync::LazyLock;
+use std::sync::Mutex;
 
 #[derive(Debug, Clone)]
 pub struct OmegaNum {
@@ -13,16 +20,19 @@ pub struct OmegaNum {
     sign: i8,
 }
 
-static max_arrow: u64 = 1000;
+static MAX_ARROW: Mutex<u64> = Mutex::new(1000);
+const MAX_SAFE_INTEGER : f64 = 9007199254740991.0;
+
+lazy_static! {
+    pub static ref MAX_E : f64 = f64::log10(MAX_SAFE_INTEGER);
+    pub static ref E_MAX_SAFE_INTEGER : OmegaNum = OmegaNum { array: vec![MAX_SAFE_INTEGER, 1.0], sign: 1 };
+    pub static ref EE_MAX_SAFE_INTEGER : OmegaNum = OmegaNum { array: vec![MAX_SAFE_INTEGER, 2.0], sign: 1 };
+    pub static ref TETRATED_MAX_SAFE_INTEGER : OmegaNum = OmegaNum { array: vec![1.0, MAX_SAFE_INTEGER], sign: 1 };
+    pub static ref PENTATED_MAX_SAFE_INTEGER : OmegaNum = OmegaNum { array: vec![1.0, 0.0, MAX_SAFE_INTEGER], sign: 1 };
+}
+
 
 impl OmegaNum {
-    const MAX_SAFE_INTEGER : f64 = 9007199254740991.0;
-    const MAX_E : f64 = 15.954589770191003; // f64::log10(OmegaNum::MAX_SAFE_INTEGER);
-
-    fn E_MAX_SAFE_INTEGER() -> OmegaNum { OmegaNum { array: vec![OmegaNum::MAX_SAFE_INTEGER, 1.0], sign: 1 } }
-    fn EE_MAX_SAFE_INTEGER() -> OmegaNum { OmegaNum { array: vec![OmegaNum::MAX_SAFE_INTEGER, 2.0], sign: 1 } }
-    fn TETRATED_MAX_SAFE_INTEGER() -> OmegaNum { OmegaNum { array: vec![1.0, OmegaNum::MAX_SAFE_INTEGER], sign: 1 } }
-    fn PENTATED_MAX_SAFE_INTEGER() -> OmegaNum { OmegaNum { array: vec![1.0, 0.0, OmegaNum::MAX_SAFE_INTEGER], sign: 1 } }
 
     pub fn sign(&self) -> i8 { self.sign }
 
@@ -88,7 +98,7 @@ impl OmegaNum {
             }
 
             // First element overflow
-            if !self.array.is_empty() && self.array[0] > OmegaNum::MAX_SAFE_INTEGER {
+            if !self.array.is_empty() && self.array[0] > MAX_SAFE_INTEGER {
                 if self.array.len() <= 1 {
                     self.array.push(0.0);
                 }
@@ -98,7 +108,7 @@ impl OmegaNum {
             }
 
             // Normalize exponent ladder
-            while self.array.len() > 1 && self.array[0] < OmegaNum::MAX_E && self.array[1] > 0.0 {
+            while self.array.len() > 1 && self.array[0] < *MAX_E && self.array[1] > 0.0 {
                 self.array[0] = 10f64.powf(self.array[0]);
                 self.array[1] -= 1.0;
                 changed = true;
@@ -121,7 +131,7 @@ impl OmegaNum {
             // General overflow propagation
             let len = self.array.len();
             for i in 1..len {
-                if self.array[i] > OmegaNum::MAX_SAFE_INTEGER {
+                if self.array[i] > MAX_SAFE_INTEGER {
                     if self.array.len() <= i + 1 {
                         self.array.push(0.0);
                     }
@@ -164,20 +174,20 @@ impl OmegaNum {
             if other < &OmegaNum::new(0.0) { return OmegaNum::new(NAN) }
             if other == &OmegaNum::new(0.0) { return OmegaNum::new(1.0) }
             if other == &OmegaNum::new(1.0) { return t.clone() }
-            if arrows >= max_arrow {
+            if arrows >= *MAX_ARROW.lock().unwrap() {
                 println!("Number too large to reasonably handle it: tried to {}-ate.", arrows + 2);
                 return OmegaNum::new(INFINITY)
             }
             if other == &OmegaNum::new(2.0) { return t.arrow(arrows - 1)(&t) }
-            if OmegaNum::minmax(&t, other).1 > OmegaNum::arrow10(arrows + 1, &OmegaNum::new(OmegaNum::MAX_SAFE_INTEGER)) { return OmegaNum::minmax(&t, other).1 };
+            if OmegaNum::minmax(&t, other).1 > OmegaNum::arrow10(arrows + 1, &OmegaNum::new(MAX_SAFE_INTEGER)) { return OmegaNum::minmax(&t, other).1 };
             let mut r: OmegaNum;
-            if t > OmegaNum::arrow10(arrows, &OmegaNum::new(OmegaNum::MAX_SAFE_INTEGER)) || other > &OmegaNum::new(OmegaNum::MAX_SAFE_INTEGER) {
-                if t > OmegaNum::arrow10(arrows, &OmegaNum::new(OmegaNum::MAX_SAFE_INTEGER)) {
+            if t > OmegaNum::arrow10(arrows, &OmegaNum::new(MAX_SAFE_INTEGER)) || other > &OmegaNum::new(MAX_SAFE_INTEGER) {
+                if t > OmegaNum::arrow10(arrows, &OmegaNum::new(MAX_SAFE_INTEGER)) {
                     r=t.clone();
                     if r.array.len() <= arrows as usize { r.array.resize(arrows as usize, 0.0) }
                     r.array[arrows as usize] -= 1.0;
                     r.normalize();
-                } else if t > OmegaNum::arrow10(arrows - 1, &OmegaNum::new(OmegaNum::MAX_SAFE_INTEGER)) {
+                } else if t > OmegaNum::arrow10(arrows - 1, &OmegaNum::new(MAX_SAFE_INTEGER)) {
                     r = OmegaNum::new(t.array[(arrows - 1) as usize]);
                 } else {
                     r = OmegaNum::new(0.0);
@@ -192,7 +202,7 @@ impl OmegaNum {
             let mut f = y.floor();
             r = t.arrow(arrows - 1)(&OmegaNum::new(y - f));
             let mut i = 0;
-            let m = OmegaNum::arrow10(arrows - 1, &OmegaNum::new(OmegaNum::MAX_SAFE_INTEGER));
+            let m = OmegaNum::arrow10(arrows - 1, &OmegaNum::new(MAX_SAFE_INTEGER));
             while f != 0.0 && r < m && i < 100 {
                 if f > 0.0 {
                     r = t.arrow(arrows - 1)(&r);
@@ -228,10 +238,127 @@ impl OmegaNum {
         else { self.array[0] }
     }
 
+    pub fn set_max_arrow(value: u64) -> Result<(), PoisonError<()>> {
+        match MAX_ARROW.lock() {
+            Ok(mut max_arrow) => { *max_arrow = value; Ok(()) },
+            Err(_) => Err(PoisonError::<()>::new(()))
+        }
+    }
+
+    pub fn get_max_arrow() -> Result<u64, PoisonError<()>> {
+        match MAX_ARROW.lock() {
+            Ok(max_arrow) => Ok(*max_arrow),
+            Err(_) => Err(PoisonError::<()>::new(()))
+        }
+    }
+
     pub fn new(value: f64) -> Self {
         let mut ret = OmegaNum { sign: if value.signum() < 0.0 { -1 } else { 1 }, array: vec![value.abs()] };
         ret.normalize();
         ret
+    }
+
+    
+    pub fn parse(value: String) -> Option<Self> {
+
+        static RE : LazyLock<RegexSet> = LazyLock::new(|| RegexSet::new(&[
+            "^\\s*\\(10\\{(?<oper>\\d+)\\}\\)\\^(?<pow>\\d+)(?<remainder>.*?)$", // (10{a})^b
+            "^\\s*\\(10(?<oper>\\^+)\\)\\^(?<pow>\\d+)(?<remainder>.*?)$", // (10^^^^)^b
+            "^\\s*10\\{(?<oper>\\d+)\\}(?<remainder>.*?)$", // 10{a}
+            "^\\s*10(?<oper>\\^+)(?<remainder>.*?)$", // 10^^^^
+            "^\\s*(?<lead>e+)?(?<value>\\d+(?:\\.\\d+)?(?:e\\d+(?:\\.\\d+)?)?)$" // ee2.17e15
+        ]).unwrap() );
+
+        static RE_SET : LazyLock<Vec<Regex>> = LazyLock::new(||
+            RE.patterns()
+            .iter()
+            .map(|pat| Regex::new(pat).unwrap())
+            .collect()
+        );
+
+        let mut s = value;
+        let mut sign = 1;
+        let mut array = vec![];
+
+        while s.starts_with("-") {
+            s.drain(0..1);
+            sign *= -1;
+        }
+        
+        while !s.is_empty() {
+            let m = RE.matches(&s);
+            if !m.matched_any() {
+                return None
+            } else {
+                match (&m).into_iter().position(|x| m.matched(x)).unwrap() {
+                    match_index @ 0..4 => {
+                        let single_re = RE_SET.get(match_index).unwrap();
+                        let caps = single_re.captures(&s).unwrap();
+
+                        let oper: usize;
+                        let pow: f64;
+                        if let Some(oper_match) = caps.name("oper") {
+                            oper = if oper_match.as_str().starts_with("^") { oper_match.len() } else {
+                                match oper_match.as_str().parse::<usize>() {
+                                    Ok(oper_val) => oper_val,
+                                    Err(_) => return None
+                                }
+                            }
+                        } else {
+                            oper = 1;
+                        }
+                        if let Some(pow_match) = caps.name("pow") {
+                            pow = match pow_match.as_str().parse::<f64>() {
+                                Ok(pow_val) => pow_val,
+                                Err(_) => return None
+                            }
+                        } else {
+                            pow = 1.0;
+                        }
+                        if let Some(remainder_match) = caps.name("remainder") {
+                            s = remainder_match.as_str().to_owned();
+                        } else {
+                            s = "".to_owned();
+                        }
+
+                        if array.len() <= oper { array.resize(oper + 1, 0.0) }
+                        array[oper] = pow;
+                    },
+                    match_index @ 4 => {
+                        let single_re = RE_SET.get(match_index).unwrap();
+                        let caps = single_re.captures(&s).unwrap();
+
+                        let lead: f64;
+                        let value: f64;
+                        if let Some(lead_match) = caps.name("lead") {
+                            lead = lead_match.len() as f64;
+                        } else {
+                            lead = 0.0;
+                        }
+                        if let Some(value_match) = caps.name("value") {
+                            value = match value_match.as_str().parse::<f64>() {
+                                Ok(value_val) => value_val,
+                                Err(_) => return None
+                            }
+                        } else {
+                            return None
+                        }
+
+                        if lead != 0.0 {
+                            if array.len() <= 1 { array.resize(2, 0.0) }
+                            array[1] = lead;
+                        }
+                        if array.len() <= 0 { array.resize(1, 0.0) }
+                        array[0] = value;
+
+                        return Some(Self { array, sign })
+                    },
+                    _ => unreachable!()
+                }
+            }
+        }
+
+        None
     }
 }
 
@@ -296,7 +423,7 @@ impl ops::AddAssign<&OmegaNum> for OmegaNum {
             return
         }
         let (p, q) = OmegaNum::minmax(self, rhs);
-        if q > OmegaNum::E_MAX_SAFE_INTEGER() || &q / &p > OmegaNum::new(OmegaNum::MAX_SAFE_INTEGER) {
+        if q > *E_MAX_SAFE_INTEGER || &q / &p > OmegaNum::new(MAX_SAFE_INTEGER) {
             q.clone_into(self);
         } else if q.array.len() < 2 || q.array[1] == 0.0 {
             OmegaNum::new(self.to_number() + rhs.to_number()).clone_into(self);
@@ -339,7 +466,7 @@ impl ops::SubAssign<&OmegaNum> for OmegaNum {
         }
         let (p, q) = OmegaNum::minmax(self, rhs);
         let n = rhs > self;
-        if q > OmegaNum::E_MAX_SAFE_INTEGER() || &q / &p > OmegaNum::new(OmegaNum::MAX_SAFE_INTEGER) {
+        if q > *E_MAX_SAFE_INTEGER || &q / &p > OmegaNum::new(MAX_SAFE_INTEGER) {
             q.clone_into(self);
             if n { self.neg_assign() };
         } else if q.array.len() < 2 || q.array[1] == 0.0 {
@@ -378,7 +505,7 @@ impl ops::MulAssign<&OmegaNum> for OmegaNum {
         if rhs.isinf() { rhs.clone_into(self); return }
 
         // Number is so large that multiplication won't make a difference
-        if &*self > &OmegaNum::EE_MAX_SAFE_INTEGER() || rhs > &OmegaNum::EE_MAX_SAFE_INTEGER() { OmegaNum::minmax(self, rhs).1.clone_into(self); return }
+        if *self > *EE_MAX_SAFE_INTEGER || rhs > &*EE_MAX_SAFE_INTEGER { OmegaNum::minmax(self, rhs).1.clone_into(self); return }
         
         // Number is small enough to just multiply floats
         let n = self.to_number() * rhs.to_number();
@@ -411,7 +538,7 @@ impl ops::DivAssign<&OmegaNum> for OmegaNum {
         if rhs.isinf() { OmegaNum::new(0.0).clone_into(self); return }
 
         // Number is so large that division won't make a difference / will slam to 0
-        if &*self > &OmegaNum::EE_MAX_SAFE_INTEGER() || rhs > &OmegaNum::EE_MAX_SAFE_INTEGER() { if &*self > rhs { return } else { OmegaNum::new(0.0).clone_into(self); return } } 
+        if *self > *EE_MAX_SAFE_INTEGER || rhs > &*EE_MAX_SAFE_INTEGER { if &*self > rhs { return } else { OmegaNum::new(0.0).clone_into(self); return } } 
 
         // Number is small enough to divide floats
         let n = self.to_number() / rhs.to_number();
@@ -442,7 +569,7 @@ impl OmegaNum {
         if &*self < &OmegaNum::new(0.0) { self.array = vec![NAN]; return }
         if self == &OmegaNum::new(1.0) { OmegaNum::new(1.0).clone_into(self); return }
         if self == &OmegaNum::new(0.0) { OmegaNum::new(0.0).clone_into(self); return }
-        if &*self > &OmegaNum::TETRATED_MAX_SAFE_INTEGER() || rhs > &OmegaNum::TETRATED_MAX_SAFE_INTEGER() { OmegaNum::minmax(self, rhs).1.clone_into(self); return }
+        if *self > *TETRATED_MAX_SAFE_INTEGER || rhs > &*TETRATED_MAX_SAFE_INTEGER { OmegaNum::minmax(self, rhs).1.clone_into(self); return }
         if self == &OmegaNum::new(10.0) {
             if rhs > &OmegaNum::new(0.0) {
                 rhs.clone_into(self);
@@ -467,16 +594,16 @@ impl OmegaNum {
         if &*self < &OmegaNum::new(0.0) { self.array = vec![NAN]; return }
         if &*self == &OmegaNum::new(1.0) { OmegaNum::new(1.0).clone_into(self); return }
         if &*self == &OmegaNum::new(0.0) { OmegaNum::new(0.0).clone_into(self); return }
-        if &*self > &OmegaNum::TETRATED_MAX_SAFE_INTEGER() || rhs > &OmegaNum::TETRATED_MAX_SAFE_INTEGER() { if rhs <= self { OmegaNum::new(0.0).clone_into(self); return } else { return } }
+        if *self > *TETRATED_MAX_SAFE_INTEGER || rhs > &*TETRATED_MAX_SAFE_INTEGER { if rhs <= self { OmegaNum::new(0.0).clone_into(self); return } else { return } }
         OmegaNum::new(10.0).pow(&self.log10().div(rhs)).clone_into(self); return
     }
 
     pub fn log10_assign(&mut self) -> () {
         if &*self < &OmegaNum::new(0.0) { self.array = vec![NAN]; return }
         if &*self == &OmegaNum::new(0.0) { OmegaNum::new(NEG_INFINITY).clone_into(self); return }
-        if &*self <= &OmegaNum::new(OmegaNum::MAX_SAFE_INTEGER) { self.array = vec![self.to_number().log10()]; return }
+        if &*self <= &OmegaNum::new(MAX_SAFE_INTEGER) { self.array = vec![self.to_number().log10()]; return }
         if self.isinf() { return }
-        if &*self > &OmegaNum::TETRATED_MAX_SAFE_INTEGER() { return }
+        if *self > *TETRATED_MAX_SAFE_INTEGER { return }
         self.array[1] -= 1.0;
         self.normalize();
     }
@@ -514,8 +641,8 @@ impl OmegaNum {
             if rhs == OmegaNum::new(4.0) { OmegaNum::new(65536.0); return }
         }
         let mut m = OmegaNum::minmax(self, &rhs).1;
-        if m > OmegaNum::PENTATED_MAX_SAFE_INTEGER() { m.clone_into(self); return }
-        if m > OmegaNum::TETRATED_MAX_SAFE_INTEGER() || rhs > OmegaNum::new(OmegaNum::MAX_SAFE_INTEGER) {
+        if m > *PENTATED_MAX_SAFE_INTEGER { m.clone_into(self); return }
+        if m > *TETRATED_MAX_SAFE_INTEGER || rhs > OmegaNum::new(MAX_SAFE_INTEGER) {
             if &*self < &OmegaNum::new(f64::exp(1.0/std::f64::consts::E)) {
                 let negln = self.ln().neg();
                 negln.lambertw().div(&negln).clone_into(self); return
@@ -531,7 +658,7 @@ impl OmegaNum {
         let mut r = self.pow(&OmegaNum::new(y - f));
         let mut l = OmegaNum::new(NAN);
         let mut i = 0;
-        m = OmegaNum::E_MAX_SAFE_INTEGER();
+        m = E_MAX_SAFE_INTEGER.clone();
         while f != 0.0 && r < m && i < 100 {
             if f > 0.0 {
                 r = self.pow(&r);
@@ -571,11 +698,11 @@ impl OmegaNum {
             if self == &a { OmegaNum::new(INFINITY).clone_into(self); return }
             if &*self > &a { self.array = vec![NAN]; return }
         }
-        if &*self > &OmegaNum::PENTATED_MAX_SAFE_INTEGER() || base > &OmegaNum::PENTATED_MAX_SAFE_INTEGER() {
+        if *self > *PENTATED_MAX_SAFE_INTEGER || base > &*PENTATED_MAX_SAFE_INTEGER {
             if &*self > base { return }
             OmegaNum::new(0.0).clone_into(self); return
         }
-        if &*self > &OmegaNum::TETRATED_MAX_SAFE_INTEGER() || base > &OmegaNum::TETRATED_MAX_SAFE_INTEGER() {
+        if *self > *TETRATED_MAX_SAFE_INTEGER || base > &*TETRATED_MAX_SAFE_INTEGER {
             if &*self > base {
                 if self.array.len() < 3 { self.array.resize(3, 0.0) }
                 self.array[2] -= 1.0;
@@ -662,17 +789,17 @@ impl OmegaNum {
         if self.isnan() { return }
         if &*self < &OmegaNum::new(-0.3678794411710499) { OmegaNum::new(NAN).clone_into(self); return }
         if principal {
-            if &*self > &OmegaNum::TETRATED_MAX_SAFE_INTEGER() { return }
-            if &*self > &OmegaNum::EE_MAX_SAFE_INTEGER() {
+            if *self > *TETRATED_MAX_SAFE_INTEGER { return }
+            if *self > *EE_MAX_SAFE_INTEGER {
                 self.array[1] -= 1.0; // This will always exist! I can be sure of it!
                 return
             }
-            if &*self > &OmegaNum::new(OmegaNum::MAX_SAFE_INTEGER) { OmegaNum::d_lambertw(self, 1e-10, true).clone_into(self); return }
+            if &*self > &OmegaNum::new(MAX_SAFE_INTEGER) { OmegaNum::d_lambertw(self, 1e-10, true).clone_into(self); return }
             else { OmegaNum::new(OmegaNum::f_lambertw(self.sign as f64 * self.array.get(0).unwrap_or(&0.0), 1e-10, true)).clone_into(self); return }
         } else {
             if self.sign > 0 { OmegaNum::new(NAN).clone_into(self); return }
-            if self.abs() > OmegaNum::EE_MAX_SAFE_INTEGER() { self.neg().recip().lambertw().neg().clone_into(self); return }
-            if self.abs() > OmegaNum::new(OmegaNum::MAX_SAFE_INTEGER) { OmegaNum::d_lambertw(self,1e-10,false).clone_into(self); return }
+            if self.abs() > *EE_MAX_SAFE_INTEGER { self.neg().recip().lambertw().neg().clone_into(self); return }
+            if self.abs() > OmegaNum::new(MAX_SAFE_INTEGER) { OmegaNum::d_lambertw(self,1e-10,false).clone_into(self); return }
             else { OmegaNum::new(OmegaNum::f_lambertw(self.sign as f64 * self.array.get(0).unwrap_or(&0.0), 1e-10, false)).clone_into(self); return }
         }
     }
@@ -682,7 +809,7 @@ impl OmegaNum {
     }
 
     pub fn floor_assign(&mut self) -> () {
-        if &*self > &OmegaNum::new(OmegaNum::MAX_SAFE_INTEGER) { return }
+        if &*self > &OmegaNum::new(MAX_SAFE_INTEGER) { return }
         if self.isnan() { return }
         if self.array.len() < 1 { self.array.resize(1, 0.0) }
         self.array[0] = self.array[0].floor();
@@ -820,13 +947,14 @@ impl OmegaNum {
     }
 }
 
-fn ldts(v: f64) -> String {
+fn ldts(v: f64, allow_end_trim: bool) -> String {
     const MIN_E: f64 = 6.0;
     let ve = v.log10().floor();
     if ve >= MIN_E || ve <= -MIN_E {
-        return format!("{:.2}", v / f64::powf(10.0, ve)) + "e" + &(ve as i64).to_string();
+        return ldts(v / f64::powf(10.0, ve), false) + "e" + &(ve as i64).to_string();
     } else {
-        return format!("{v:.2}").trim_end_matches("0").trim_end_matches(".").to_owned();
+        if allow_end_trim { return format!("{v:.2}").trim_end_matches(".00").to_owned(); }
+        else { return format!("{v:.2}").to_owned(); }
     }
 }
 
@@ -839,118 +967,35 @@ impl std::fmt::Display for OmegaNum {
         if self.array.len() >= 2 {
             for i in (2..=self.array.len()-1).rev() {
                 let q = if i >= 5 { "{".to_owned() + &i.to_string() + "}" } else { "^".repeat(i) };
-                if self.array[i] > 1.0 { s += &("(10".to_owned() + &q + ")^" + &ldts(self.array[i]) + " "); }
+                if self.array[i] > 1.0 { s += &("(10".to_owned() + &q + ")^" + &ldts(self.array[i], true) + " "); }
                 else if self.array[i] == 1.0 { s += &("10".to_owned() + &q); }
             }
         }
-        if *self.array.get(1).unwrap_or(&0.0) == 0.0 { s += &ldts(self.to_number()); }
-        else if *self.array.get(1).unwrap() < 3.0 { s += &("e".repeat((self.array[1] - 1.0) as usize) + &ldts(f64::powf(10.0, self.array[0] - f64::floor(self.array[0]))) + "e" + &ldts(f64::floor(self.array[0]))); }
-        else if *self.array.get(1).unwrap() < 8.0 { s += &("e".repeat(self.array[1] as usize) + &self.array[0].to_string()); }
-        else { s += &("(10^)^".to_owned() + &ldts(*self.array.get(1).unwrap_or(&0.0)) + " " + &ldts(*self.array.get(0).unwrap_or(&0.0))); }
+        if *self.array.get(1).unwrap_or(&0.0) == 0.0 { s += &ldts(self.to_number(), true); }
+        else if self.array[1] < 3.0 || self.array[0] < 100.0 { s += &("e".repeat((self.array[1] - 1.0) as usize) + &ldts(f64::powf(10.0, self.array[0] - f64::floor(self.array[0])), false) + "e" + &ldts(f64::floor(self.array[0]), true)); }
+        else if self.array[1] < 8.0 { s += &("e".repeat(self.array[1] as usize) + &ldts(self.array[0], true)); }
+        else { s += &("(10^)^".to_owned() + &ldts(*self.array.get(1).unwrap_or(&0.0), true) + " " + &ldts(*self.array.get(0).unwrap_or(&0.0), true)); }
         write!(f, "{s}")
     }
 }
 
-fn main() {
-    let a = OmegaNum::new(1e100);
-    let b = OmegaNum::new(2e100);
+fn main() -> ! {
+    let mut a = OmegaNum::new(10.0);
+    let b = OmegaNum::new(1e100).pow(&OmegaNum::new(1e9));
 
     println!("Hello, world!");
 
-    let now = Instant::now();
-    let c = &a + &b;
-    let elp = now.elapsed();
-
-    println!("{a} + {b} = {c} (operation took {} μs)", elp.as_nanos() as f64 / 1000.0);
-
-    let now = Instant::now();
-    let d = &c + &b;
-    let elp = now.elapsed();
-
-    println!("{c} + {b} = {d} (operation took {} μs)", elp.as_nanos() as f64 / 1000.0);
-
-    let now = Instant::now();
-    let c = &a - &b;
-    let elp = now.elapsed();
-
-    println!("{a} - {b} = {c} (operation took {} μs)", elp.as_nanos() as f64 / 1000.0);
-
-    let now = Instant::now();
-    let c = &a * &b;
-    let elp = now.elapsed();
-
-    println!("{a} * {b} = {c} (operation took {} μs)", elp.as_nanos() as f64 / 1000.0);
-    
-    let now = Instant::now();
-    let c = &a / &b;
-    let elp = now.elapsed();
-
-    println!("{a} / {b} = {c} (operation took {} μs)", elp.as_nanos() as f64 / 1000.0);
-
-    let now = Instant::now();
-    let d = &c / &b;
-    let elp = now.elapsed();
-
-    println!("{c} / {b} = {d} (operation took {} μs)", elp.as_nanos() as f64 / 1000.0);
-
-    let now = Instant::now();
-    let c = &b.tetrate(&d);
-    let elp = now.elapsed();
-
-    println!("{b} ^^ {d} = {c} (operation took {} μs)", elp.as_nanos() as f64 / 1000.0);
-
-    let now = Instant::now();
-    let c = a.pow(&b);
-    let elp = now.elapsed();
-
-    println!("{a} ^ {b} = {c} (operation took {} μs)", elp.as_nanos() as f64 / 1000.0);
-
-    let now = Instant::now();
-    let c = b.tetrate(&a);
-    let elp = now.elapsed();
-
-    println!("{b} ^^ {a} = {c} (operation took {} μs)", elp.as_nanos() as f64 / 1000.0);
-
-    let now = Instant::now();
-    let c = b.tetrate(&a);
-    let elp = now.elapsed();
-
-    println!("{b} ^^ {a} = {c} (operation took {} μs)", elp.as_nanos() as f64 / 1000.0);
-
-    let now = Instant::now();
-    let c = b.pentate(&a);
-    let elp = now.elapsed();
-
-    println!("{b} ^^^ {a} = {c} (operation took {} μs)", elp.as_nanos() as f64 / 1000.0);
-
-    let now = Instant::now();
-    let c = b.arrow(4)(&a);
-    let elp = now.elapsed();
-
-    println!("{b} ^^^^ {a} = {c} (operation took {} μs)", elp.as_nanos() as f64 / 1000.0);
-
-    let now = Instant::now();
-    let c = b.arrow(5)(&a);
-    let elp = now.elapsed();
-
-    println!("{b} {{5}} {a} = {c} (operation took {} μs)", elp.as_nanos() as f64 / 1000.0);
-
-    let now = Instant::now();
-    let c = b.arrow(999)(&a);
-    let elp = now.elapsed();
-
-    println!("{b} {{999}} {a} = {c} (operation took {} μs)", elp.as_nanos() as f64 / 1000.0);
-
-    let now = Instant::now();
-    let c = b.arrow(1000)(&a);
-    let elp = now.elapsed();
-
-    println!("{b} {{1000}} {a} = {c} (operation took {} μs)", elp.as_nanos() as f64 / 1000.0);
-
-    let now = Instant::now();
-    let c = b.arrow(1001)(&a);
-    let elp = now.elapsed();
-
-    println!("{b} {{1001}} {a} = {c} (operation took {} μs)", elp.as_nanos() as f64 / 1000.0);
+    let start = Instant::now();
+    let mut i = 0_i64;
+    loop {
+        let prev = Instant::now();
+        a.pow_assign(&b);
+        i += 1;
+        let elp = start.elapsed().as_secs_f64();
+        let dt = prev.elapsed().as_nanos() as f64 / 1000.0;
+        if i % 100 == 0 {
+            println!("[{elp:.2}] ({dt:.2} μs) ({i} calculations elapsed): {a}");
+        }
+    }
 
 }
