@@ -989,7 +989,7 @@ impl std::fmt::Display for OmegaNum {
             }
         }
         if *self.array.get(1).unwrap_or(&0.0) == 0.0 { s += &ldts(self.to_number(), true); }
-        else if self.array[1] < 3.0 || self.array[0] < 100.0 { s += &("e".repeat((self.array[1] - 1.0) as usize) + &ldts(f64::powf(10.0, self.array[0] - f64::floor(self.array[0])), false) + "e" + &ldts(f64::floor(self.array[0]), true)); }
+        else if self.array[1] < 3.0 || self.array[0] < 100.0 && self.array[1] < 8.0 { s += &("e".repeat((self.array[1] - 1.0) as usize) + &ldts(f64::powf(10.0, self.array[0] - f64::floor(self.array[0])), false) + "e" + &ldts(f64::floor(self.array[0]), true)); }
         else if self.array[1] < 8.0 { s += &("e".repeat(self.array[1] as usize) + &ldts(self.array[0], true)); }
         else { s += &("(10^)^".to_owned() + &ldts(*self.array.get(1).unwrap_or(&0.0), true) + " " + &ldts(*self.array.get(0).unwrap_or(&0.0), true)); }
         write!(f, "{s}")
