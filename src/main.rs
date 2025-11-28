@@ -6,8 +6,9 @@ use std::f64::NAN;
 use std::f64::INFINITY;
 use std::f64::NEG_INFINITY;
 use std::sync::PoisonError;
-use std::time::Instant;
+use std::io::Write;
 
+use rand::random_range;
 use regex::Regex;
 use regex::RegexSet;
 use lazy_static::lazy_static;
@@ -20,7 +21,8 @@ pub struct OmegaNum {
     sign: i8,
 }
 
-static MAX_ARROW: Mutex<u64> = Mutex::new(1000);
+const MAX_ARROW_DEFAULT : u64 = 1000;
+static MAX_ARROW: Mutex<u64> = Mutex::new(MAX_ARROW_DEFAULT);
 const MAX_SAFE_INTEGER : f64 = 9007199254740991.0;
 
 lazy_static! {
@@ -33,7 +35,6 @@ lazy_static! {
 
 
 impl OmegaNum {
-
     pub fn sign(&self) -> i8 { self.sign }
 
     pub fn isnan(&self) -> bool {
@@ -156,6 +157,7 @@ impl OmegaNum {
     }
 
     fn arrow10(arrows: u64, other: &OmegaNum) -> OmegaNum {
+        assert_ne!(arrows, 0);
         let mut ret = OmegaNum::new(1.0);
         ret.array = Vec::new();
         ret.array.resize(arrows as usize, 0.0);
@@ -167,14 +169,15 @@ impl OmegaNum {
     pub fn arrow(&self, arrows: u64) -> Box<dyn Fn(&OmegaNum) -> OmegaNum> {
         let t = self.clone();
         
-        if arrows == 0 { Box::new(move |other: &OmegaNum| { t.mul(other) }) }
-        else if arrows == 1 { Box::new(move |other: &OmegaNum| { t.pow(other) }) }
-        else if arrows == 2 { Box::new(move |other: &OmegaNum| { t.tetrate(other) }) }
+        if arrows == u64::MAX { Box::new(move |other: &OmegaNum| t.add(other) )}
+        else if arrows == 0 { Box::new(move |other: &OmegaNum| t.mul(other) ) }
+        else if arrows == 1 { Box::new(move |other: &OmegaNum| t.pow(other) ) }
+        else if arrows == 2 { Box::new(move |other: &OmegaNum| t.tetrate(other) ) }
         else { Box::new(move |other: &OmegaNum| {
             if other < &OmegaNum::new(0.0) { return OmegaNum::new(NAN) }
             if other == &OmegaNum::new(0.0) { return OmegaNum::new(1.0) }
             if other == &OmegaNum::new(1.0) { return t.clone() }
-            if arrows >= *MAX_ARROW.lock().unwrap() {
+            if arrows >= match MAX_ARROW.lock() { Ok(max_arrow) => *max_arrow, Err(_) => u64::MIN } {
                 println!("Number too large to reasonably handle it: tried to {}-ate.", arrows + 2);
                 return OmegaNum::new(INFINITY)
             }
@@ -211,19 +214,27 @@ impl OmegaNum {
                 i += 1;
             }
             if i == 100 { f = 0.0 }
-            if r.array.len() <= (arrows - 1) as usize { r.array.resize((arrows - 1) as usize, 0.0) }
+            if r.array.len() <= (arrows - 1) as usize { r.array.resize(arrows as usize, 0.0) }
             r.array[(arrows - 1) as usize] += f;
             r.normalize();
             r
         })}
     }
 
-    pub fn minmax_m(a: OmegaNum, b: OmegaNum) -> (OmegaNum, OmegaNum) {
+    fn minmax_m(a: OmegaNum, b: OmegaNum) -> (OmegaNum, OmegaNum) {
         if a < b { (a, b) } else { (b, a) }
     }
 
     pub fn minmax(a: &OmegaNum, b: &OmegaNum) -> (OmegaNum, OmegaNum) {
         return OmegaNum::minmax_m(a.clone(), b.clone());
+    }
+
+    pub fn min(a: &OmegaNum, b: &OmegaNum) -> OmegaNum {
+        OmegaNum::minmax(a, b).0
+    }
+
+    pub fn max(a: &OmegaNum, b: &OmegaNum) -> OmegaNum {
+        OmegaNum::minmax(a, b).1
     }
 
     pub fn abs(&self) -> OmegaNum {
@@ -245,6 +256,13 @@ impl OmegaNum {
         }
     }
 
+    pub fn reset_max_arrow() -> () {
+        match MAX_ARROW.lock() {
+            Ok(mut max_arrow) => *max_arrow = MAX_ARROW_DEFAULT,
+            Err(err) => *err.into_inner() = MAX_ARROW_DEFAULT
+        }
+    }
+
     pub fn get_max_arrow() -> Result<u64, PoisonError<()>> {
         match MAX_ARROW.lock() {
             Ok(max_arrow) => Ok(*max_arrow),
@@ -257,7 +275,6 @@ impl OmegaNum {
         ret.normalize();
         ret
     }
-
     
     pub fn parse(value: String) -> Option<Self> {
 
@@ -267,12 +284,12 @@ impl OmegaNum {
             "^\\s*10\\{(?<oper>\\d+)\\}(?<remainder>.*?)$", // 10{a}
             "^\\s*10(?<oper>\\^+)(?<remainder>.*?)$", // 10^^^^
             "^\\s*(?<lead>e+)?(?<value>\\d+(?:\\.\\d+)?(?:e\\d+(?:\\.\\d+)?)?)$" // ee2.17e15
-        ]).unwrap() );
+        ]).expect("Regex compilation failure") );
 
         static RE_SET : LazyLock<Vec<Regex>> = LazyLock::new(||
             RE.patterns()
             .iter()
-            .map(|pat| Regex::new(pat).unwrap())
+            .map(|pat| Regex::new(pat).expect("Regex compilation failure"))
             .collect()
         );
 
@@ -979,23 +996,97 @@ impl std::fmt::Display for OmegaNum {
     }
 }
 
-fn main() -> ! {
+fn test_single(a : &OmegaNum, b : &OmegaNum) -> () {
+    print!("{a} + {b} = ");
+    std::io::stdout().flush().ok().unwrap();
+    let c = a + b;
+    println!("{c}");
+
+    print!("{a} - {b} = ");
+    std::io::stdout().flush().ok().unwrap();
+    let c = a - b;
+    println!("{c}");
+
+    print!("{a} * {b} = ");
+    std::io::stdout().flush().ok().unwrap();
+    let c = a * b;
+    println!("{c}");
+
+    print!("{a} / {b} = ");
+    std::io::stdout().flush().ok().unwrap();
+    let c = a / b;
+    println!("{c}");
+
+    print!("{a} ^ {b} = ");
+    std::io::stdout().flush().ok().unwrap();
+    let c = a.pow(b);
+    println!("{c}");
+
+    print!("{b} √ {a} = ");
+    std::io::stdout().flush().ok().unwrap();
+    let c = a.root(b);
+    println!("{c}");
+
+    print!("{a} ^^ {b} = ");
+    std::io::stdout().flush().ok().unwrap();
+    let c = a.tetrate(b);
+    println!("{c}");
+    
+    print!("{a} ^^^ {b} = ");
+    std::io::stdout().flush().ok().unwrap();
+    let c = a.pentate(b);
+    println!("{c}");
+}
+
+fn test_oom(max_pow: u64) -> () {
+    let mut a = OmegaNum::new(random_range(0.0..10.0));
+    let mut b = OmegaNum::new(random_range(0.0..10.0));
+
+    for i in 0..max_pow {
+        (a, b) = (a.arrow(i)(&b), b.arrow(i.wrapping_sub(1))(&a));
+    }
+
+    test_single(&a, &b);
+}
+
+fn tests() -> () {
+    unsafe { std::env::set_var("RUST_BACKTRACE", "1") }
+    for i in 0..4 {
+        test_oom(i);
+    }
+}
+
+
+fn main() {
+    tests();
+
+    /*
     let mut a = OmegaNum::new(10.0);
     let b = OmegaNum::new(1e100).pow(&OmegaNum::new(1e9));
 
-    println!("Hello, world!");
-
     let start = Instant::now();
-    let mut i = 0_i64;
+    let mut i = 0_u8;
+    let mut it = 0_u64;
+    let mut q = vec![];
+    let mut tadt = 0_f64;
+    q.resize(256, 0.0);
     loop {
         let prev = Instant::now();
         a.pow_assign(&b);
-        i += 1;
+        i = i.wrapping_add(1);
+        it += 1;
         let elp = start.elapsed().as_secs_f64();
         let dt = prev.elapsed().as_nanos() as f64 / 1000.0;
-        if i % 100 == 0 {
-            println!("[{elp:.2}] ({dt:.2} μs) ({i} calculations elapsed): {a}");
+        q[i as usize] = dt;
+        let adt = q.iter().sum::<f64>() / q.len() as f64;
+        let acps = 1000000.0 / adt;
+
+        if it % 65536 == 0 {
+            tadt = tadt * (1.0 - 1.0 / (it / 65536) as f64) + adt / (it / 65536) as f64;
+            let tacps = 1000000.0 / tadt;
+            println!("[{elp:.2}] ({dt:.2} μs) (avg: {adt:.2} μs / {acps:.0} cps) (tot_avg: {tadt:.2} μs / {tacps:.0} cps) ({it} calculations elapsed): {a}");
         }
     }
+    */
 
 }
