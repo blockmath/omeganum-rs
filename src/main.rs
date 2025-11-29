@@ -8,6 +8,7 @@ use std::f64::NEG_INFINITY;
 use std::sync::PoisonError;
 use std::io::Write;
 
+use rand::random_bool;
 use rand::random_range;
 use regex::Regex;
 use regex::RegexSet;
@@ -20,6 +21,8 @@ pub struct OmegaNum {
     array: Vec<f64>,
     sign: i8,
 }
+
+const DEBUG_PARSE : bool = true;
 
 const MAX_ARROW_DEFAULT : u64 = 1000;
 static MAX_ARROW: Mutex<u64> = Mutex::new(MAX_ARROW_DEFAULT);
@@ -276,7 +279,7 @@ impl OmegaNum {
         ret
     }
     
-    pub fn parse(value: String) -> Option<Self> {
+    pub fn parse(str_value: String) -> Option<Self> {
 
         static RE : LazyLock<RegexSet> = LazyLock::new(|| RegexSet::new(&[
             "^\\s*\\(10\\{(?<oper>\\d+)\\}\\)\\^(?<pow>\\d+)(?<remainder>.*?)$", // (10{a})^b
@@ -293,7 +296,9 @@ impl OmegaNum {
             .collect()
         );
 
-        let mut s = value;
+        if DEBUG_PARSE { println!("Trying to match on '{str_value}'") };
+
+        let mut s = str_value.clone();
         let mut sign = 1;
         let mut array = vec![];
 
@@ -305,75 +310,114 @@ impl OmegaNum {
         while !s.is_empty() {
             let m = RE.matches(&s);
             if !m.matched_any() {
+                if DEBUG_PARSE { println!("Could not match any pattern on '{s}' in '{str_value}'") };
                 return None
             } else {
-                match (&m).into_iter().position(|x| m.matched(x)).unwrap() {
-                    match_index @ 0..4 => {
-                        let single_re = RE_SET.get(match_index).unwrap();
-                        let caps = single_re.captures(&s).unwrap();
+                for match_index in 0..5 {
+                    if m.matched(match_index) {
+                        if match_index < 4 {
+                            if DEBUG_PARSE { println!("Matched (10^)^ pattern '{s}'") };
+                            let single_re = RE_SET.get(match_index).unwrap();
+                            let caps = single_re.captures(&s).unwrap();
 
-                        let oper: usize;
-                        let pow: f64;
-                        if let Some(oper_match) = caps.name("oper") {
-                            oper = if oper_match.as_str().starts_with("^") { oper_match.len() } else {
-                                match oper_match.as_str().parse::<usize>() {
-                                    Ok(oper_val) => oper_val,
-                                    Err(_) => return None
+                            let oper: usize;
+                            let pow: f64;
+                            if let Some(oper_match) = caps.name("oper") {
+                                oper = if oper_match.as_str().starts_with("^") { oper_match.len() } else {
+                                    match oper_match.as_str().parse::<usize>() {
+                                        Ok(oper_val) => oper_val,
+                                        Err(_) => { println!("Could not parse oper (for (10^)^ pattern '{s}') in '{str_value}'"); return None }
+                                    }
                                 }
+                            } else {
+                                oper = 1;
                             }
-                        } else {
-                            oper = 1;
-                        }
-                        if let Some(pow_match) = caps.name("pow") {
-                            pow = match pow_match.as_str().parse::<f64>() {
-                                Ok(pow_val) => pow_val,
-                                Err(_) => return None
+                            if let Some(pow_match) = caps.name("pow") {
+                                pow = match pow_match.as_str().parse::<f64>() {
+                                    Ok(pow_val) => pow_val,
+                                    Err(_) => { println!("Could not parse pow (for (10^)^ pattern '{s}') in '{str_value}'"); return None }
+                                }
+                            } else {
+                                pow = 1.0;
                             }
-                        } else {
-                            pow = 1.0;
-                        }
-                        if let Some(remainder_match) = caps.name("remainder") {
-                            s = remainder_match.as_str().to_owned();
-                        } else {
-                            s = "".to_owned();
-                        }
-
-                        if array.len() <= oper { array.resize(oper + 1, 0.0) }
-                        array[oper] = pow;
-                    },
-                    match_index @ 4 => {
-                        let single_re = RE_SET.get(match_index).unwrap();
-                        let caps = single_re.captures(&s).unwrap();
-
-                        let lead: f64;
-                        let value: f64;
-                        if let Some(lead_match) = caps.name("lead") {
-                            lead = lead_match.len() as f64;
-                        } else {
-                            lead = 0.0;
-                        }
-                        if let Some(value_match) = caps.name("value") {
-                            value = match value_match.as_str().parse::<f64>() {
-                                Ok(value_val) => value_val,
-                                Err(_) => return None
+                            if let Some(remainder_match) = caps.name("remainder") {
+                                s = remainder_match.as_str().to_owned();
+                            } else {
+                                s = "".to_owned();
                             }
+
+                            if array.len() <= oper { array.resize(oper + 1, 0.0) }
+                            array[oper] = pow;
+                        } else if match_index == 4 {
+                            if DEBUG_PARSE { println!("Matched lead-value pattern '{s}'") };
+                            // Returning infinity?
+                            let single_re = RE_SET.get(match_index).unwrap();
+                            let caps = single_re.captures(&s).unwrap();
+
+                            let lead: f64;
+                            let value: f64;
+                            if let Some(lead_match) = caps.name("lead") {
+                                lead = lead_match.len() as f64;
+                                if DEBUG_PARSE { println!("Matched lead pattern '{}' (parsed to {lead})", lead_match.as_str()) };
+                            } else {
+                                lead = 0.0;
+                                if DEBUG_PARSE { println!("No lead matched! (parsed to 0.0)") };
+                            }
+                            if let Some(value_match) = caps.name("value") {
+                                value = match value_match.as_str().parse::<f64>() {
+                                    Ok(value_val) => value_val,
+                                    Err(_) => { println!("Could not parse value (for lead-value pattern '{s}') in '{str_value}'"); return None }
+                                };
+                                if DEBUG_PARSE { println!("Matched value pattern '{}' (parsed to {value})", value_match.as_str()) };
+                            } else {
+                                if DEBUG_PARSE { println!("No value found (for lead-value pattern '{s}') in '{str_value}'") };
+                                return None
+                            }
+
+                            if lead != 0.0 {
+                                if array.len() <= 1 { array.resize(2, 0.0) }
+                                array[1] = lead;
+                            }
+
+                            if value.is_infinite() {
+                                if DEBUG_PARSE { println!("Value is infinite! Reparsing...") };
+                                let vstr = caps.name("value").unwrap().as_str();
+                                let (s1, s2) = vstr.split_at(vstr.find("e").expect("Value is infinity without `e`? How?"));
+                                let s2 = s2.trim_start_matches("e");
+                                if DEBUG_PARSE { println!("Value split into {s1} e {s2}") };
+
+                                if array.len() <= 1 { array.resize(2, 0.0) };
+                                array[1] += 1.0;
+
+                                let v1 = match s1.parse::<f64>() {
+                                    Ok(v1_val) => v1_val,
+                                    Err(_) => { println!("Could not parse value (for mantissa pattern '{s1}') in '{str_value}'"); return None }
+                                };
+
+                                let v2 = match s2.parse::<f64>() {
+                                    Ok(v2_val) => v2_val,
+                                    Err(_) => { println!("Could not parse value (for exponent pattern '{s2}') in '{str_value}'"); return None }
+                                };
+                                array[0] = v2 * f64::log10(v1);
+
+                                if DEBUG_PARSE { println!("Value parsed into {v1} e {v2} (e{})", array[0]) };
+
+                            } else {
+                                if array.len() <= 0 { array.resize(1, 0.0) }
+                                array[0] = value;
+                            }
+
+                            return Some(Self { array, sign })
                         } else {
-                            return None
+                            unreachable!()
                         }
-
-                        if lead != 0.0 {
-                            if array.len() <= 1 { array.resize(2, 0.0) }
-                            array[1] = lead;
-                        }
-                        if array.len() <= 0 { array.resize(1, 0.0) }
-                        array[0] = value;
-
-                        return Some(Self { array, sign })
-                    },
-                    _ => unreachable!()
+                        break;
+                    }
                 }
             }
         }
+
+        println!("Unexpected end of input ('{str_value}')");
 
         None
     }
@@ -532,6 +576,7 @@ impl ops::MulAssign<&OmegaNum> for OmegaNum {
     }
 }
 
+// TODO: Apparently this sometimes results in a/b = naneinf when a <<< b? Possible issue with comparison?
 impl ops::DivAssign<&OmegaNum> for OmegaNum {
     fn div_assign(&mut self, rhs: &OmegaNum) -> () {
         // Only divide positive numbers
@@ -611,7 +656,7 @@ impl OmegaNum {
         if &*self < &OmegaNum::new(0.0) { self.array = vec![NAN]; return }
         if &*self == &OmegaNum::new(1.0) { OmegaNum::new(1.0).clone_into(self); return }
         if &*self == &OmegaNum::new(0.0) { OmegaNum::new(0.0).clone_into(self); return }
-        if *self > *TETRATED_MAX_SAFE_INTEGER || rhs > &*TETRATED_MAX_SAFE_INTEGER { if rhs <= self { OmegaNum::new(0.0).clone_into(self); return } else { return } }
+        if *self > *TETRATED_MAX_SAFE_INTEGER || rhs > &*TETRATED_MAX_SAFE_INTEGER { if rhs >= self { OmegaNum::new(1.0).clone_into(self); return } else { return } }
         OmegaNum::new(10.0).pow(&self.log10().div(rhs)).clone_into(self); return
     }
 
@@ -964,9 +1009,12 @@ impl OmegaNum {
     }
 }
 
+const MIN_E: f64 = 6.0;
 fn ldts(v: f64, allow_end_trim: bool) -> String {
-    const MIN_E: f64 = 6.0;
     let ve = v.log10().floor();
+    if ve == NEG_INFINITY {
+        return "0".to_owned();
+    }
     if ve >= MIN_E || ve <= -MIN_E {
         return ldts(v / f64::powf(10.0, ve), false) + "e" + &(ve as i64).to_string();
     } else {
@@ -989,7 +1037,9 @@ impl std::fmt::Display for OmegaNum {
             }
         }
         if *self.array.get(1).unwrap_or(&0.0) == 0.0 { s += &ldts(self.to_number(), true); }
-        else if self.array[1] < 3.0 || self.array[0] < 100.0 && self.array[1] < 8.0 { s += &("e".repeat((self.array[1] - 1.0) as usize) + &ldts(f64::powf(10.0, self.array[0] - f64::floor(self.array[0])), false) + "e" + &ldts(f64::floor(self.array[0]), true)); }
+        else if (self.array[1] < 3.0 && self.array[0].log10() < MIN_E) || (self.array[0] < 100.0 && self.array[1] < 8.0) {
+            s += &("e".repeat((self.array[1] - 1.0) as usize) + &ldts(f64::powf(10.0, self.array[0] - f64::floor(self.array[0])), false) + "e" + &ldts(f64::floor(self.array[0]), true));
+        }
         else if self.array[1] < 8.0 { s += &("e".repeat(self.array[1] as usize) + &ldts(self.array[0], true)); }
         else { s += &("(10^)^".to_owned() + &ldts(*self.array.get(1).unwrap_or(&0.0), true) + " " + &ldts(*self.array.get(0).unwrap_or(&0.0), true)); }
         write!(f, "{s}")
@@ -1036,6 +1086,11 @@ fn test_single(a : &OmegaNum, b : &OmegaNum) -> () {
     std::io::stdout().flush().ok().unwrap();
     let c = a.pentate(b);
     println!("{c}");
+
+    print!("{a} {{5}} {b} = ");
+    std::io::stdout().flush().ok().unwrap();
+    let c = a.arrow(5)(b);
+    println!("{c}");
 }
 
 fn test_oom(max_pow: u64) -> () {
@@ -1043,7 +1098,13 @@ fn test_oom(max_pow: u64) -> () {
     let mut b = OmegaNum::new(random_range(0.0..10.0));
 
     for i in 0..max_pow {
-        (a, b) = (a.arrow(i)(&b), b.arrow(i.wrapping_sub(1))(&a));
+        for _j in 0..random_range(1..(max_pow + 2)) {
+            (a, b) = (a.arrow(i)(&b), b.arrow(i.wrapping_sub(1))(&a));
+        }
+
+        if random_bool(0.5) {
+            (a, b) = (b, a);
+        }
     }
 
     test_single(&a, &b);
@@ -1051,14 +1112,17 @@ fn test_oom(max_pow: u64) -> () {
 
 fn tests() -> () {
     unsafe { std::env::set_var("RUST_BACKTRACE", "1") }
-    for i in 0..4 {
+    for i in 0..7 {
+        println!("[TEST] ##{i}");
         test_oom(i);
     }
+    println!("[TEST END]");
 }
 
 
 fn main() {
     tests();
+
 
     /*
     let mut a = OmegaNum::new(10.0);
