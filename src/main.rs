@@ -7,7 +7,7 @@ use rand::random_range;
 
 use omeganum::OmegaNum;
 
-fn test_single(a : &OmegaNum, b : &OmegaNum) -> () {
+fn test_single(a : &OmegaNum, b : &OmegaNum) {
     print!("{a} + {b} = ");
     std::io::stdout().flush().ok().unwrap();
     let c = a + b;
@@ -54,7 +54,7 @@ fn test_single(a : &OmegaNum, b : &OmegaNum) -> () {
     println!("{c}");
 }
 
-fn test_oom(max_pow: u64) -> () {
+fn test_oom(max_pow: u64) {
     let mut a = OmegaNum::new(random_range(0.0..10.0));
     let mut b = OmegaNum::new(random_range(0.0..10.0));
 
@@ -71,7 +71,7 @@ fn test_oom(max_pow: u64) -> () {
     test_single(&a, &b);
 }
 
-fn tests() -> () {
+fn tests() {
     unsafe { std::env::set_var("RUST_BACKTRACE", "1") }
     for i in 0..7 {
         println!("[TEST] ##{i}");

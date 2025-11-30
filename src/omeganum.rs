@@ -2,9 +2,11 @@ use std::ops;
 use std::ops::*;
 use std::cmp::*;
 
+/*
 use std::f64::NAN;
 use std::f64::INFINITY;
 use std::f64::NEG_INFINITY;
+*/
 use std::sync::PoisonError;
 
 use regex::Regex;
@@ -42,27 +44,27 @@ impl OmegaNum {
     pub fn sign(&self) -> i8 { self.sign }
 
     pub fn isnan(&self) -> bool {
-        match self.array.get(0) {
+        match self.array.first() {
             None => true,
             Some(x) => x.is_nan()
         }
     }
 
     pub fn isinf(&self) -> bool {
-        match self.array.get(0) {
+        match self.array.first() {
             None => false,
             Some(x) => x.is_infinite()
         }
     }
 
     pub fn isint(&self) -> bool {
-        match self.array.get(0) {
+        match self.array.first() {
             None => false,
             Some(x) => x.fract() == 0.0
         }
     }
 
-    pub fn normalize(&mut self) -> () {
+    pub fn normalize(&mut self) {
         if self.array.is_empty() {
             self.array = vec![0.0];
         }
@@ -178,12 +180,12 @@ impl OmegaNum {
         else if arrows == 1 { Box::new(move |other: &OmegaNum| t.pow(other) ) }
         else if arrows == 2 { Box::new(move |other: &OmegaNum| t.tetrate(other) ) }
         else { Box::new(move |other: &OmegaNum| {
-            if other < &OmegaNum::new(0.0) { return OmegaNum::new(NAN) }
+            if other < &OmegaNum::new(0.0) { return OmegaNum::new(f64::NAN) }
             if other == &OmegaNum::new(0.0) { return OmegaNum::new(1.0) }
             if other == &OmegaNum::new(1.0) { return t.clone() }
             if arrows >= match MAX_ARROW.lock() { Ok(max_arrow) => *max_arrow, Err(_) => u64::MIN } {
                 println!("Number too large to reasonably handle it: tried to {}-ate.", arrows + 2);
-                return OmegaNum::new(INFINITY)
+                return OmegaNum::new(f64::INFINITY)
             }
             if other == &OmegaNum::new(2.0) { return t.arrow(arrows - 1)(&t) }
             if OmegaNum::minmax(&t, other).1 > OmegaNum::arrow10(arrows + 1, &OmegaNum::new(MAX_SAFE_INTEGER)) { return OmegaNum::minmax(&t, other).1 };
@@ -230,7 +232,7 @@ impl OmegaNum {
     }
 
     pub fn minmax(a: &OmegaNum, b: &OmegaNum) -> (OmegaNum, OmegaNum) {
-        return OmegaNum::minmax_m(a.clone(), b.clone());
+        OmegaNum::minmax_m(a.clone(), b.clone())
     }
 
     pub fn min(a: &OmegaNum, b: &OmegaNum) -> OmegaNum {
@@ -247,8 +249,8 @@ impl OmegaNum {
     }
 
     pub fn to_number(&self) -> f64 {
-        if self.sign < 0 { -1.0 * self.neg().to_number() }
-        else if self.array.len() > 1 && (self.array[1] >= 2.0 || self.array[1] == 1.0 && self.array[0] > f64::MAX.log10()) { INFINITY }
+        if self.sign < 0 { -self.neg().to_number() }
+        else if self.array.len() > 1 && (self.array[1] >= 2.0 || self.array[1] == 1.0 && self.array[0] > f64::MAX.log10()) { f64::INFINITY }
         else if self.array.len() > 1 && self.array[1] == 1.0 { f64::powf(10.0, self.array[0]) }
         else { self.array[0] }
     }
@@ -260,7 +262,7 @@ impl OmegaNum {
         }
     }
 
-    pub fn reset_max_arrow() -> () {
+    pub fn reset_max_arrow() {
         match MAX_ARROW.lock() {
             Ok(mut max_arrow) => *max_arrow = MAX_ARROW_DEFAULT,
             Err(err) => *err.into_inner() = MAX_ARROW_DEFAULT
@@ -282,7 +284,7 @@ impl OmegaNum {
     
     pub fn parse(str_value: String) -> Option<Self> {
 
-        static RE : LazyLock<RegexSet> = LazyLock::new(|| RegexSet::new(&[
+        static RE : LazyLock<RegexSet> = LazyLock::new(|| RegexSet::new([
             "^\\s*\\(10\\{(?<oper>\\d+)\\}\\)\\^(?<pow>\\d+)(?<remainder>.*?)$", // (10{a})^b
             "^\\s*\\(10(?<oper>\\^+)\\)\\^(?<pow>\\d+)(?<remainder>.*?)$", // (10^^^^)^b
             "^\\s*10\\{(?<oper>\\d+)\\}(?<remainder>.*?)$", // 10{a}
@@ -404,7 +406,7 @@ impl OmegaNum {
                                 if DEBUG_PARSE { println!("Value parsed into {v1} e {v2} (e{})", array[0]) };
 
                             } else {
-                                if array.len() <= 0 { array.resize(1, 0.0) }
+                                if array.is_empty() { array.resize(1, 0.0) }
                                 array[0] = value;
                             }
 
@@ -456,7 +458,7 @@ impl PartialOrd for OmegaNum {
 }
 
 impl ops::AddAssign<&OmegaNum> for OmegaNum {
-    fn add_assign(&mut self, rhs: &OmegaNum) -> () {
+    fn add_assign(&mut self, rhs: &OmegaNum) {
         if self.sign < 0 {
             (&*self).neg().add_assign(&rhs.neg());
             self.neg_assign();
@@ -474,7 +476,7 @@ impl ops::AddAssign<&OmegaNum> for OmegaNum {
             return
         }
         if self.isnan() || rhs.isnan() || (self.isinf() && rhs.isinf() && self.sign != rhs.sign) {
-            self.array = vec![NAN];
+            self.array = vec![f64::NAN];
             return
         }
         if self.isinf() {
@@ -497,7 +499,7 @@ impl ops::AddAssign<&OmegaNum> for OmegaNum {
 }
 
 impl ops::SubAssign<&OmegaNum> for OmegaNum {
-    fn sub_assign(&mut self, rhs: &OmegaNum) -> () {
+    fn sub_assign(&mut self, rhs: &OmegaNum) {
         if self.sign < 0 {
             (&*self).neg().sub_assign(&rhs.neg());
             self.neg_assign();
@@ -515,7 +517,7 @@ impl ops::SubAssign<&OmegaNum> for OmegaNum {
             return
         }
         if self.isnan() || rhs.isnan() || (self.isinf() && rhs.isinf() && self.sign == rhs.sign) {
-            self.array = vec![NAN];
+            self.array = vec![f64::NAN];
             return
         }
         if self.isinf() {
@@ -542,19 +544,19 @@ impl ops::SubAssign<&OmegaNum> for OmegaNum {
 }
 
 impl OmegaNum {
-    pub fn neg_assign(&mut self) -> () {
+    pub fn neg_assign(&mut self) {
         self.sign *= -1;
     }
 }
 
 impl ops::MulAssign<&OmegaNum> for OmegaNum {
-    fn mul_assign(&mut self, rhs: &OmegaNum) -> () {
+    fn mul_assign(&mut self, rhs: &OmegaNum) {
         // Only multiply positive numbers
         if self.sign * rhs.sign < 0 { self.abs().mul(&rhs.abs()).neg().clone_into(self); return }
         if self.sign < 0 { self.abs().mul(&rhs.abs()).clone_into(self); return }
 
         // NaN propagation
-        if self.isnan() || rhs.isnan() || self == &OmegaNum::new(0.0) && rhs.isinf() || self.isinf() && rhs == &OmegaNum::new(0.0) { self.array = vec![NAN]; return }
+        if self.isnan() || rhs.isnan() || self == &OmegaNum::new(0.0) && rhs.isinf() || self.isinf() && rhs == &OmegaNum::new(0.0) { self.array = vec![f64::NAN]; return }
         
         // Multiplying by zero
         if rhs == &OmegaNum::new(0.0) || self == &OmegaNum::new(0.0) { self.array = vec![0.0]; return }
@@ -571,23 +573,23 @@ impl ops::MulAssign<&OmegaNum> for OmegaNum {
         
         // Number is small enough to just multiply floats
         let n = self.to_number() * rhs.to_number();
-        if n < INFINITY { OmegaNum::new(n).clone_into(self); return }
+        if n < f64::INFINITY { OmegaNum::new(n).clone_into(self); return }
 
-        OmegaNum::new(10.0).pow(&self.log10().add(&rhs.log10())).clone_into(self); return
+        OmegaNum::new(10.0).pow(&self.log10().add(&rhs.log10())).clone_into(self);
     }
 }
 
 impl ops::DivAssign<&OmegaNum> for OmegaNum {
-    fn div_assign(&mut self, rhs: &OmegaNum) -> () {
+    fn div_assign(&mut self, rhs: &OmegaNum) {
         // Only divide positive numbers
         if self.sign * rhs.sign < 0 { self.abs().div(&rhs.abs()).neg().clone_into(self); return }
         if self.sign < 0 { self.abs().div(&rhs.abs()).clone_into(self); return }
 
         // NaN propagation
-        if self.isnan() || rhs.isnan() || self.isinf() && rhs.isinf() || self == &OmegaNum::new(0.0) && rhs == &OmegaNum::new(0.0) { self.array = vec![NAN]; return }
+        if self.isnan() || rhs.isnan() || self.isinf() && rhs.isinf() || self == &OmegaNum::new(0.0) && rhs == &OmegaNum::new(0.0) { self.array = vec![f64::NAN]; return }
         
         // Division by zero
-        if rhs == &OmegaNum::new(0.0) { OmegaNum::new(INFINITY).clone_into(self); return }
+        if rhs == &OmegaNum::new(0.0) { OmegaNum::new(f64::INFINITY).clone_into(self); return }
 
         // Division by one
         if rhs == &OmegaNum::new(1.0) { return }
@@ -604,31 +606,31 @@ impl ops::DivAssign<&OmegaNum> for OmegaNum {
 
         // Number is small enough to divide floats
         let n = self.to_number() / rhs.to_number();
-        if n < INFINITY { OmegaNum::new(n).clone_into(self); return }
+        if n < f64::INFINITY { OmegaNum::new(n).clone_into(self); return }
 
         OmegaNum::new(10.0).pow(&self.log10().sub(&rhs.log10())).clone_into(self);
     }
 }
 
 impl ops::RemAssign<&OmegaNum> for OmegaNum {
-    fn rem_assign(&mut self, rhs: &OmegaNum) -> () {
+    fn rem_assign(&mut self, rhs: &OmegaNum) {
         if rhs == &OmegaNum::new(0.0) { OmegaNum::new(0.0).clone_into(self); return }
         if self.sign * rhs.sign < 0 { self.abs().rem(&rhs.abs()).neg().clone_into(self); return }
         if self.sign < 0 { self.abs().rem(&rhs.abs()).clone_into(self); return }
-        self.sub(&self.div(rhs).floor().mul(rhs)).clone_into(self); return
+        self.sub(&self.div(rhs).floor().mul(rhs)).clone_into(self);
     }
 }
 
 impl OmegaNum {
-    pub fn pow_assign(&mut self, rhs: &OmegaNum) -> () {
+    pub fn pow_assign(&mut self, rhs: &OmegaNum) {
         if rhs == &OmegaNum::new(0.0) { OmegaNum::new(1.0).clone_into(self); return }
         if rhs == &OmegaNum::new(1.0) { return }
         if rhs < &OmegaNum::new(0.0) { (&OmegaNum::new(1.0) / &self.pow(&rhs.neg())).clone_into(self); return }
-        if &*self < &OmegaNum::new(0.0) && rhs.isint() {
+        if *self < OmegaNum::new(0.0) && rhs.isint() {
             if rhs % &OmegaNum::new(2.0) < OmegaNum::new(1.0) { self.abs().pow(rhs).clone_into(self); return }
             self.abs().pow(rhs).neg().clone_into(self); return
         }
-        if &*self < &OmegaNum::new(0.0) { self.array = vec![NAN]; return }
+        if *self < OmegaNum::new(0.0) { self.array = vec![f64::NAN]; return }
         if self == &OmegaNum::new(1.0) { OmegaNum::new(1.0).clone_into(self); return }
         if self == &OmegaNum::new(0.0) { OmegaNum::new(0.0).clone_into(self); return }
         if *self > *TETRATED_MAX_SAFE_INTEGER || rhs > &*TETRATED_MAX_SAFE_INTEGER { OmegaNum::minmax(self, rhs).1.clone_into(self); return }
@@ -644,54 +646,54 @@ impl OmegaNum {
         }
         if rhs < &OmegaNum::new(1.0) { self.root_assign(&(&OmegaNum::new(1.0) / rhs)); return }
         let n = f64::powf(self.to_number(), rhs.to_number());
-        if n < INFINITY { OmegaNum::new(n).clone_into(self); return }
-        OmegaNum::new(10.0).pow(&self.log10().mul(rhs)).clone_into(self); return
+        if n < f64::INFINITY { OmegaNum::new(n).clone_into(self); return }
+        OmegaNum::new(10.0).pow(&self.log10().mul(rhs)).clone_into(self);
     }
 
-    pub fn root_assign(&mut self, rhs: &OmegaNum) -> () {
+    pub fn root_assign(&mut self, rhs: &OmegaNum) {
         if rhs == &OmegaNum::new(1.0) { return }
         if rhs < &OmegaNum::new(0.0) { (&OmegaNum::new(1.0) / &self.root(&rhs.neg())).clone_into(self); return }
         if rhs < &OmegaNum::new(1.0) { self.pow(&(&OmegaNum::new(1.0) / rhs)).clone_into(self); return }
-        if &*self == &OmegaNum::new(0.0) && rhs.isint() && rhs % &OmegaNum::new(2.0) == OmegaNum::new(1.0) { self.neg().root(rhs).neg().clone_into(self); return }
-        if &*self < &OmegaNum::new(0.0) { self.array = vec![NAN]; return }
-        if &*self == &OmegaNum::new(1.0) { OmegaNum::new(1.0).clone_into(self); return }
-        if &*self == &OmegaNum::new(0.0) { OmegaNum::new(0.0).clone_into(self); return }
+        if *self == OmegaNum::new(0.0) && rhs.isint() && rhs % &OmegaNum::new(2.0) == OmegaNum::new(1.0) { self.neg().root(rhs).neg().clone_into(self); return }
+        if *self < OmegaNum::new(0.0) { self.array = vec![f64::NAN]; return }
+        if *self == OmegaNum::new(1.0) { OmegaNum::new(1.0).clone_into(self); return }
+        if *self == OmegaNum::new(0.0) { OmegaNum::new(0.0).clone_into(self); return }
         if *self > *TETRATED_MAX_SAFE_INTEGER || rhs > &*TETRATED_MAX_SAFE_INTEGER { if rhs >= self { OmegaNum::new(1.0).clone_into(self); return } else { return } }
-        OmegaNum::new(10.0).pow(&self.log10().div(rhs)).clone_into(self); return
+        OmegaNum::new(10.0).pow(&self.log10().div(rhs)).clone_into(self);
     }
 
-    pub fn log10_assign(&mut self) -> () {
-        if &*self < &OmegaNum::new(0.0) { self.array = vec![NAN]; return }
-        if &*self == &OmegaNum::new(0.0) { OmegaNum::new(NEG_INFINITY).clone_into(self); return }
-        if &*self <= &OmegaNum::new(MAX_SAFE_INTEGER) { self.array = vec![self.to_number().log10()]; return }
+    pub fn log10_assign(&mut self) {
+        if *self < OmegaNum::new(0.0) { self.array = vec![f64::NAN]; return }
+        if *self == OmegaNum::new(0.0) { OmegaNum::new(f64::NEG_INFINITY).clone_into(self); return }
+        if *self <= OmegaNum::new(MAX_SAFE_INTEGER) { self.array = vec![self.to_number().log10()]; return }
         if self.isinf() { return }
         if *self > *TETRATED_MAX_SAFE_INTEGER { return }
         self.array[1] -= 1.0;
         self.normalize();
     }
 
-    pub fn tetrate_assign(&mut self, rhs: &OmegaNum) -> () {
+    pub fn tetrate_assign(&mut self, rhs: &OmegaNum) {
         self.tetrate_from_assign(rhs, &OmegaNum::new(1.0))
     }
 
-    pub fn tetrate_from_assign(&mut self, rhs_param: &OmegaNum, payload: &OmegaNum) -> () {
+    pub fn tetrate_from_assign(&mut self, rhs_param: &OmegaNum, payload: &OmegaNum) {
         let mut rhs: OmegaNum = rhs_param.clone();
         if payload != &OmegaNum::new(1.0) { rhs = rhs.add(&payload.slog(self)); }
-        if self.isnan() || rhs.isnan() || payload.isnan() { self.array = vec![NAN]; return }
+        if self.isnan() || rhs.isnan() || payload.isnan() { self.array = vec![f64::NAN]; return }
         if rhs.isinf() && rhs.sign > 0 {
-            if &*self >= &OmegaNum::new(f64::exp(1.0 / std::f64::consts::E)) { OmegaNum::new(INFINITY).clone_into(self); return }
+            if *self >= OmegaNum::new(f64::exp(1.0 / std::f64::consts::E)) { OmegaNum::new(f64::INFINITY).clone_into(self); return }
             //Formula for infinite height power tower.
             let negln = self.ln().neg();
             negln.lambertw().div(&negln).clone_into(self); return
         }
-        if rhs <= OmegaNum::new(-2.0) { self.array = vec![NAN]; return }
+        if rhs <= OmegaNum::new(-2.0) { self.array = vec![f64::NAN]; return }
         if self == &OmegaNum::new(0.0) {
-            if rhs == OmegaNum::new(0.0) { self.array = vec![NAN]; return }
+            if rhs == OmegaNum::new(0.0) { self.array = vec![f64::NAN]; return }
             if &rhs % &OmegaNum::new(2.0) == OmegaNum::new(0.0) { OmegaNum::new(0.0).clone_into(self); return }
             OmegaNum::new(1.0).clone_into(self); return
         }
         if self == &OmegaNum::new(1.0) {
-            if rhs == OmegaNum::new(-1.0) { self.array = vec![NAN]; return };
+            if rhs == OmegaNum::new(-1.0) { self.array = vec![f64::NAN]; return };
             OmegaNum::new(1.0).clone_into(self); return
         }
         if rhs == OmegaNum::new(-1.0) { OmegaNum::new(0.0).clone_into(self); return }
@@ -705,7 +707,7 @@ impl OmegaNum {
         let mut m = OmegaNum::minmax(self, &rhs).1;
         if m > *PENTATED_MAX_SAFE_INTEGER { m.clone_into(self); return }
         if m > *TETRATED_MAX_SAFE_INTEGER || rhs > OmegaNum::new(MAX_SAFE_INTEGER) {
-            if &*self < &OmegaNum::new(f64::exp(1.0/std::f64::consts::E)) {
+            if *self < OmegaNum::new(f64::exp(1.0/std::f64::consts::E)) {
                 let negln = self.ln().neg();
                 negln.lambertw().div(&negln).clone_into(self); return
             }
@@ -718,7 +720,7 @@ impl OmegaNum {
         let y = rhs.to_number();
         let mut f = y.floor();
         let mut r = self.pow(&OmegaNum::new(y - f));
-        let mut l = OmegaNum::new(NAN);
+        let mut l = OmegaNum::new(f64::NAN);
         let mut i = 0;
         m = E_MAX_SAFE_INTEGER.clone();
         while f != 0.0 && r < m && i < 100 {
@@ -741,24 +743,24 @@ impl OmegaNum {
             }
             i += 1;
         }
-        if i == 100 || &*self < &OmegaNum::new(f64::exp(1.0/std::f64::consts::E)) { f = 0.0 }
+        if i == 100 || *self < OmegaNum::new(f64::exp(1.0/std::f64::consts::E)) { f = 0.0 }
         if r.array.len() < 2 { r.array.resize(2, 0.0) }
         r.array[1] += f;
         r.normalize();
-        r.clone_into(self); return
+        r.clone_into(self);
     }
 
-    pub fn slog_assign(&mut self, base: &OmegaNum) -> () {
-        if self.isnan() || base.isnan() || self.isinf() && base.isinf() { self.array = vec![NAN]; return }
+    pub fn slog_assign(&mut self, base: &OmegaNum) {
+        if self.isnan() || base.isnan() || self.isinf() && base.isinf() { self.array = vec![f64::NAN]; return }
         if self.isinf() { return }
         if base.isinf() { OmegaNum::new(0.0).clone_into(self); return }
-        if &*self < &OmegaNum::new(0.0) { OmegaNum::new(-1.0).clone_into(self); return }
+        if *self < OmegaNum::new(0.0) { OmegaNum::new(-1.0).clone_into(self); return }
         if self == &OmegaNum::new(1.0) { OmegaNum::new(0.0).clone_into(self); return }
         if self == base { OmegaNum::new(1.0).clone_into(self); return }
         if base < &OmegaNum::new(f64::exp(1.0/std::f64::consts::E)) {
-            let a = OmegaNum::tetrate(base, &OmegaNum::new(INFINITY));
-            if self == &a { OmegaNum::new(INFINITY).clone_into(self); return }
-            if &*self > &a { self.array = vec![NAN]; return }
+            let a = OmegaNum::tetrate(base, &OmegaNum::new(f64::INFINITY));
+            if self == &a { OmegaNum::new(f64::INFINITY).clone_into(self); return }
+            if *self > a { self.array = vec![f64::NAN]; return }
         }
         if *self > *PENTATED_MAX_SAFE_INTEGER || base > &*PENTATED_MAX_SAFE_INTEGER {
             if &*self > base { return }
@@ -794,15 +796,15 @@ impl OmegaNum {
             }
         }
         // if (x.gt(10)) // <-- tf is this ???
-        OmegaNum::new(r).clone_into(self); return
+        OmegaNum::new(r).clone_into(self);
     }
 
-    pub fn slog10_assign(&mut self) -> () {
+    pub fn slog10_assign(&mut self) {
         self.slog_assign(&OmegaNum::new(10.0));
     }
 
     fn f_lambertw(z: f64, tol: f64, principal: bool) -> f64 {
-        const OMEGA: f64 = 0.56714329040978387299997;
+        const OMEGA: f64 = 0.5671432904097838;
         let mut w: f64;
         if z.is_infinite() { return z; }
         if principal {
@@ -811,7 +813,7 @@ impl OmegaNum {
             if z < 10.0 { w = 0.0; }
             else { w = z.ln() - z.ln().ln(); }
         } else {
-            if z == 0.0 { return -INFINITY; }
+            if z == 0.0 { return f64::NEG_INFINITY; }
             if z <= -0.1 { w = -2.0; }
             else { w = (-z).ln() - (-z).ln().ln(); }
         }
@@ -824,7 +826,7 @@ impl OmegaNum {
     }
 
     fn d_lambertw(z: &OmegaNum, tol: f64, principal: bool) -> OmegaNum {
-        const OMEGA: f64 = 0.56714329040978387299997;
+        const OMEGA: f64 = 0.5671432904097838;
         let mut w: OmegaNum;
         if z.isinf() || z.isnan() { return z.clone(); }
         if principal {
@@ -832,7 +834,7 @@ impl OmegaNum {
             if z == &OmegaNum::new(1.0) { return OmegaNum::new(OMEGA); }
             w = z.ln();
         } else {
-        if z == &OmegaNum::new(0.0) { return OmegaNum::new(NEG_INFINITY); }
+        if z == &OmegaNum::new(0.0) { return OmegaNum::new(f64::NEG_INFINITY); }
             w = z.neg().ln();
         }
         for _ in 0..100 {
@@ -847,33 +849,33 @@ impl OmegaNum {
         panic!("d_lambertw: Iteration failed to converge ({z})");
     }
 
-    pub fn lambertw_principal_assign(&mut self, principal: bool) -> () {
+    pub fn lambertw_principal_assign(&mut self, principal: bool) {
         if self.isnan() { return }
-        if &*self < &OmegaNum::new(-0.3678794411710499) { OmegaNum::new(NAN).clone_into(self); return }
+        if *self < OmegaNum::new(-0.3678794411710499) { OmegaNum::new(f64::NAN).clone_into(self); return }
         if principal {
             if *self > *TETRATED_MAX_SAFE_INTEGER { return }
             if *self > *EE_MAX_SAFE_INTEGER {
                 self.array[1] -= 1.0; // This will always exist! I can be sure of it!
                 return
             }
-            if &*self > &OmegaNum::new(MAX_SAFE_INTEGER) { OmegaNum::d_lambertw(self, 1e-10, true).clone_into(self); return }
-            else { OmegaNum::new(OmegaNum::f_lambertw(self.sign as f64 * self.array.get(0).unwrap_or(&0.0), 1e-10, true)).clone_into(self); return }
+            if *self > OmegaNum::new(MAX_SAFE_INTEGER) { OmegaNum::d_lambertw(self, 1e-10, true).clone_into(self); }
+            else { OmegaNum::new(OmegaNum::f_lambertw(self.sign as f64 * self.array.first().unwrap_or(&0.0), 1e-10, true)).clone_into(self); }
         } else {
-            if self.sign > 0 { OmegaNum::new(NAN).clone_into(self); return }
+            if self.sign > 0 { OmegaNum::new(f64::NAN).clone_into(self); return }
             if self.abs() > *EE_MAX_SAFE_INTEGER { self.neg().recip().lambertw().neg().clone_into(self); return }
-            if self.abs() > OmegaNum::new(MAX_SAFE_INTEGER) { OmegaNum::d_lambertw(self,1e-10,false).clone_into(self); return }
-            else { OmegaNum::new(OmegaNum::f_lambertw(self.sign as f64 * self.array.get(0).unwrap_or(&0.0), 1e-10, false)).clone_into(self); return }
+            if self.abs() > OmegaNum::new(MAX_SAFE_INTEGER) { OmegaNum::d_lambertw(self,1e-10,false).clone_into(self); }
+            else { OmegaNum::new(OmegaNum::f_lambertw(self.sign as f64 * self.array.first().unwrap_or(&0.0), 1e-10, false)).clone_into(self); }
         }
     }
 
-    pub fn lambertw_assign(&mut self) -> () {
+    pub fn lambertw_assign(&mut self) {
         self.lambertw_principal_assign(true);
     }
 
-    pub fn floor_assign(&mut self) -> () {
-        if &*self > &OmegaNum::new(MAX_SAFE_INTEGER) { return }
+    pub fn floor_assign(&mut self) {
+        if *self > OmegaNum::new(MAX_SAFE_INTEGER) { return }
         if self.isnan() { return }
-        if self.array.len() < 1 { self.array.resize(1, 0.0) }
+        if self.array.is_empty() { self.array.resize(1, 0.0) }
         self.array[0] = self.array[0].floor();
     }
 
@@ -1012,14 +1014,15 @@ impl OmegaNum {
 const MIN_E: f64 = 6.0;
 fn ldts(v: f64, allow_end_trim: bool) -> String {
     let ve = v.log10().floor();
-    if ve == NEG_INFINITY {
+    if ve == f64::NEG_INFINITY {
         return "0".to_owned();
     }
     if ve >= MIN_E || ve <= -MIN_E {
-        return ldts(v / f64::powf(10.0, ve), false) + "e" + &(ve as i64).to_string();
+        ldts(v / f64::powf(10.0, ve), false) + "e" + &(ve as i64).to_string()
+    } else if allow_end_trim {
+        format!("{v:.2}").trim_end_matches(".00").to_owned()
     } else {
-        if allow_end_trim { return format!("{v:.2}").trim_end_matches(".00").to_owned(); }
-        else { return format!("{v:.2}").to_owned(); }
+        format!("{v:.2}").to_owned()
     }
 }
 
@@ -1041,7 +1044,7 @@ impl std::fmt::Display for OmegaNum {
             s += &("e".repeat((self.array[1] - 1.0) as usize) + &ldts(f64::powf(10.0, self.array[0] - f64::floor(self.array[0])), false) + "e" + &ldts(f64::floor(self.array[0]), true));
         }
         else if self.array[1] < 8.0 { s += &("e".repeat(self.array[1] as usize) + &ldts(self.array[0], true)); }
-        else { s += &("(10^)^".to_owned() + &ldts(*self.array.get(1).unwrap_or(&0.0), true) + " " + &ldts(*self.array.get(0).unwrap_or(&0.0), true)); }
+        else { s += &("(10^)^".to_owned() + &ldts(*self.array.get(1).unwrap_or(&0.0), true) + " " + &ldts(*self.array.first().unwrap_or(&0.0), true)); }
         write!(f, "{s}")
     }
 }
