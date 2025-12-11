@@ -184,7 +184,7 @@ impl OmegaNum {
             if other == &OmegaNum::new(0.0) { return OmegaNum::new(1.0) }
             if other == &OmegaNum::new(1.0) { return t.clone() }
             if arrows >= match MAX_ARROW.lock() { Ok(max_arrow) => *max_arrow, Err(_) => u64::MIN } {
-                println!("Number too large to reasonably handle it: tried to {}-ate.", arrows + 2);
+                eprintln!("Number too large to reasonably handle it: tried to {}-ate.", arrows + 2);
                 return OmegaNum::new(f64::INFINITY)
             }
             if other == &OmegaNum::new(2.0) { return t.arrow(arrows - 1)(&t) }
@@ -299,7 +299,7 @@ impl OmegaNum {
             .collect()
         );
 
-        if DEBUG_PARSE { println!("Trying to match on '{str_value}'") };
+        if DEBUG_PARSE { eprintln!("Trying to match on '{str_value}'") };
 
         let mut s = str_value.clone();
         let mut sign = 1;
@@ -313,13 +313,13 @@ impl OmegaNum {
         while !s.is_empty() {
             let m = RE.matches(&s);
             if !m.matched_any() {
-                if DEBUG_PARSE { println!("Could not match any pattern on '{s}' in '{str_value}'") };
+                if DEBUG_PARSE { eprintln!("Could not match any pattern on '{s}' in '{str_value}'") };
                 return None
             } else {
                 for match_index in 0..5 {
                     if m.matched(match_index) {
                         if match_index < 4 {
-                            if DEBUG_PARSE { println!("Matched (10^)^ pattern '{s}'") };
+                            if DEBUG_PARSE { eprintln!("Matched (10^)^ pattern '{s}'") };
                             let single_re = RE_SET.get(match_index).unwrap();
                             let caps = single_re.captures(&s).unwrap();
 
@@ -329,7 +329,7 @@ impl OmegaNum {
                                 oper = if oper_match.as_str().starts_with("^") { oper_match.len() } else {
                                     match oper_match.as_str().parse::<usize>() {
                                         Ok(oper_val) => oper_val,
-                                        Err(_) => { println!("Could not parse oper (for (10^)^ pattern '{s}') in '{str_value}'"); return None }
+                                        Err(_) => { eprintln!("Could not parse oper (for (10^)^ pattern '{s}') in '{str_value}'"); return None }
                                     }
                                 }
                             } else {
@@ -338,7 +338,7 @@ impl OmegaNum {
                             if let Some(pow_match) = caps.name("pow") {
                                 pow = match pow_match.as_str().parse::<f64>() {
                                     Ok(pow_val) => pow_val,
-                                    Err(_) => { println!("Could not parse pow (for (10^)^ pattern '{s}') in '{str_value}'"); return None }
+                                    Err(_) => { eprintln!("Could not parse pow (for (10^)^ pattern '{s}') in '{str_value}'"); return None }
                                 }
                             } else {
                                 pow = 1.0;
@@ -352,7 +352,7 @@ impl OmegaNum {
                             if array.len() <= oper { array.resize(oper + 1, 0.0) }
                             array[oper] = pow;
                         } else if match_index == 4 {
-                            if DEBUG_PARSE { println!("Matched lead-value pattern '{s}'") };
+                            if DEBUG_PARSE { eprintln!("Matched lead-value pattern '{s}'") };
                             // Returning infinity?
                             let single_re = RE_SET.get(match_index).unwrap();
                             let caps = single_re.captures(&s).unwrap();
@@ -361,19 +361,19 @@ impl OmegaNum {
                             let value: f64;
                             if let Some(lead_match) = caps.name("lead") {
                                 lead = lead_match.len() as f64;
-                                if DEBUG_PARSE { println!("Matched lead pattern '{}' (parsed to {lead})", lead_match.as_str()) };
+                                if DEBUG_PARSE { eprintln!("Matched lead pattern '{}' (parsed to {lead})", lead_match.as_str()) };
                             } else {
                                 lead = 0.0;
-                                if DEBUG_PARSE { println!("No lead matched! (parsed to 0.0)") };
+                                if DEBUG_PARSE { eprintln!("No lead matched! (parsed to 0.0)") };
                             }
                             if let Some(value_match) = caps.name("value") {
                                 value = match value_match.as_str().parse::<f64>() {
                                     Ok(value_val) => value_val,
-                                    Err(_) => { println!("Could not parse value (for lead-value pattern '{s}') in '{str_value}'"); return None }
+                                    Err(_) => { eprintln!("Could not parse value (for lead-value pattern '{s}') in '{str_value}'"); return None }
                                 };
-                                if DEBUG_PARSE { println!("Matched value pattern '{}' (parsed to {value})", value_match.as_str()) };
+                                if DEBUG_PARSE { eprintln!("Matched value pattern '{}' (parsed to {value})", value_match.as_str()) };
                             } else {
-                                if DEBUG_PARSE { println!("No value found (for lead-value pattern '{s}') in '{str_value}'") };
+                                if DEBUG_PARSE { eprintln!("No value found (for lead-value pattern '{s}') in '{str_value}'") };
                                 return None
                             }
 
@@ -383,27 +383,27 @@ impl OmegaNum {
                             }
 
                             if value.is_infinite() {
-                                if DEBUG_PARSE { println!("Value is infinite! Reparsing...") };
+                                if DEBUG_PARSE { eprintln!("Value is infinite! Reparsing...") };
                                 let vstr = caps.name("value").unwrap().as_str();
                                 let (s1, s2) = vstr.split_at(vstr.find("e").expect("Value is infinity without `e`? How?"));
                                 let s2 = s2.trim_start_matches("e");
-                                if DEBUG_PARSE { println!("Value split into {s1} e {s2}") };
+                                if DEBUG_PARSE { eprintln!("Value split into {s1} e {s2}") };
 
                                 if array.len() <= 1 { array.resize(2, 0.0) };
                                 array[1] += 1.0;
 
                                 let v1 = match s1.parse::<f64>() {
                                     Ok(v1_val) => v1_val,
-                                    Err(_) => { println!("Could not parse value (for mantissa pattern '{s1}') in '{str_value}'"); return None }
+                                    Err(_) => { eprintln!("Could not parse value (for mantissa pattern '{s1}') in '{str_value}'"); return None }
                                 };
 
                                 let v2 = match s2.parse::<f64>() {
                                     Ok(v2_val) => v2_val,
-                                    Err(_) => { println!("Could not parse value (for exponent pattern '{s2}') in '{str_value}'"); return None }
+                                    Err(_) => { eprintln!("Could not parse value (for exponent pattern '{s2}') in '{str_value}'"); return None }
                                 };
                                 array[0] = v2 * f64::log10(v1);
 
-                                if DEBUG_PARSE { println!("Value parsed into {v1} e {v2} (e{})", array[0]) };
+                                if DEBUG_PARSE { eprintln!("Value parsed into {v1} e {v2} (e{})", array[0]) };
 
                             } else {
                                 if array.is_empty() { array.resize(1, 0.0) }
@@ -420,7 +420,7 @@ impl OmegaNum {
             }
         }
 
-        println!("Unexpected end of input ('{str_value}')");
+        eprintln!("Unexpected end of input ('{str_value}')");
 
         None
     }
