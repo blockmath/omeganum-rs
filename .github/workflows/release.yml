@@ -139,8 +139,8 @@ jobs:
             exit 1
           fi
           
-          echo "Final directory structure:"
-          find "$outdir" -type f
+          # echo "Final directory structure:"
+          # find "$outdir" -type f
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
