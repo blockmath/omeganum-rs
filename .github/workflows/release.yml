@@ -78,12 +78,34 @@ jobs:
           mkdir -p "$outdir"
 
           srcdir="target/${{ matrix.target }}/${{ matrix.profile }}"
-          shopt -s nullglob
-          for f in "$srcdir"/*; do
-            [ -f "$f" ] || continue
-            cp "$f" "$outdir/"
-          done
-          echo "Copied files into $outdir"
+          
+          # Determine library filename based on OS and target
+          target="${{ matrix.target }}"
+          profile="${{ matrix.profile }}"
+          
+          # Look for library files with common patterns
+          if [[ "$target" == *"windows"* ]]; then
+            # Windows DLL
+            libfile=$(find "$srcdir" -maxdepth 1 -name "*.dll" | head -1)
+          elif [[ "$target" == *"darwin"* ]]; then
+            # macOS dylib
+            libfile=$(find "$srcdir" -maxdepth 1 -name "*.dylib" | head -1)
+          else
+            # Linux and other Unix-like systems use .so
+            libfile=$(find "$srcdir" -maxdepth 1 -name "*.so" | head -1)
+          fi
+          
+          if [ -n "$libfile" ] && [ -f "$libfile" ]; then
+            cp "$libfile" "$outdir/"
+            echo "Copied library file: $(basename "$libfile")"
+          else
+            echo "Warning: No library file found in $srcdir"
+            ls -la "$srcdir/" || true
+            exit 1
+          fi
+          
+          echo "Final directory structure:"
+          find "$outdir" -type f
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
