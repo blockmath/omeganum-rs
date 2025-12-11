@@ -1,0 +1,19 @@
+[build]
+target-dir = "../omeganum/lib"
+
+[target.x86_64-unknown-linux-gnu]
+linker = ".cargo/x86_64-unknown-linux-gnu-cc.bat"
+
+[target.x86_64-apple-darwin]
+rustflags = [
+  "-C", "link-arg=-undefined",
+  "-C", "link-arg=dynamic_lookup",
+]
+linker = ".cargo/x86_64-apple-darwin-cc.bat"
+
+[target.aarch64-apple-darwin]
+rustflags = [
+  "-C", "link-arg=-undefined",
+  "-C", "link-arg=dynamic_lookup",
+]
+linker = ".cargo/aarch64-apple-darwin-cc.bat"
