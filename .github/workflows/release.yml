@@ -115,13 +115,10 @@ jobs:
         run: |
           set -e
 
-          ls
-          ls *
-
-          outdir="target/${{ matrix.target }}/${{ matrix.profile }}"
+          outdir="omeganum/lib/${{ matrix.target }}/${{ matrix.profile }}"
           mkdir -p "$outdir"
 
-          srcdir="target/${{ matrix.target }}/${{ matrix.profile }}"
+          srcdir="$outdir"
           target="${{ matrix.target }}"
           
           # Determine library filename based on platform
@@ -180,7 +177,6 @@ jobs:
           for dir in downloaded_artifacts/*; do
             echo "Merging $dir ; Directory contents:"
             ls "$dir"
-            rm -rf "$dir/debug"
             cp -r "$dir/*/" omeganum/lib/ 2>/dev/null || true
           done
 
