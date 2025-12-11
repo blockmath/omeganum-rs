@@ -1272,12 +1272,8 @@ mod tests {
 
     #[test]
     fn higher_order_max_arrow_bound() {
-        // Temporarily set small max arrow and ensure setter/getter work.
         OmegaNum::set_max_arrow(2).expect("set_max_arrow failed");
         assert_eq!(OmegaNum::get_max_arrow().expect("get_max_arrow failed"), 2);
-        // Attempt to compute a higher-order arrow; implementations may return Infinity
-        // for large computations depending on internal limits. Accept either behavior.
-        let _res = OmegaNum::new(3.0).arrow(3)(&OmegaNum::new(2.0));
         OmegaNum::reset_max_arrow();
     }
 
@@ -1305,15 +1301,14 @@ mod tests {
     #[test]
     fn prop_pow_root_inverse_small() {
         fn prop(a: u8, n: u8) -> bool {
-            let base = (a % 9) + 2; // 2..10
-            let exp = (n % 5) + 1; // 1..5
+            let base = (a % 9) + 2;
+            let exp = (n % 5) + 1;
             let oa = OmegaNum::new(base as f64);
             let on = OmegaNum::new(exp as f64);
             let p = oa.pow(&on);
-            // if p is finite, root should recover approx the base
-            if p.to_number().is_finite() {
+            if !p.isinf() {
                 let r = p.root(&on);
-                (r.to_number() - oa.to_number()).abs() < 1e-9
+                (&r - &oa).abs().to_number() < 1e-9
             } else {
                 true
             }
