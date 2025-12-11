@@ -1,0 +1,98 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }} - ${{ matrix.profile }})
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        include:
+          # ---- Windows (GNU) ----
+          - os: windows-latest
+            target: x86_64-pc-windows-gnu
+            profile: debug
+          - os: windows-latest
+            target: x86_64-pc-windows-gnu
+            profile: release
+
+          # ---- Linux (GNU) ----
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            profile: debug
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            profile: release
+
+          # ---- macOS Intel ----
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            profile: debug
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            profile: release
+
+          # ---- macOS ARM ----
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            profile: debug
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            profile: release
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # Extra setup for Windows GNU
+      - name: Install MinGW (Windows GNU)
+        if: contains(matrix.target, 'windows-gnu')
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          install: mingw-w64-x86_64-toolchain
+
+      # Extra setup for Linux cross-compile tooling (rarely needed)
+      - name: Install Linux build tools
+        if: contains(matrix.target, 'linux-gnu')
+        run: sudo apt-get update && sudo apt-get install -y build-essential
+
+      - name: Cargo Build
+        run: |
+          if [ "${{ matrix.profile }}" = "release" ]; then
+            cargo build --target ${{ matrix.target }} --release
+          else
+            cargo build --target ${{ matrix.target }}
+          fi
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: myproject-${{ matrix.target }}-${{ matrix.profile }}
+          path: target/${{ matrix.target }}/release/*, target/${{ matrix.target }}/debug/*
+          if-no-files-found: error
+
+  release:
+    name: Publish Release
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/* 
