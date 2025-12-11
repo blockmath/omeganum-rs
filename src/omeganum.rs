@@ -1239,4 +1239,39 @@ mod tests {
         assert!(val.is_finite(), "2^-1 should be finite");
         assert!((val - 0.5).abs() < 1e-12, "expected 0.5, got {}", val);
     }
+
+    #[test]
+    fn higher_order_arrow_equivalence() {
+        let base = OmegaNum::new(2.0);
+        let other = OmegaNum::new(3.0);
+
+        // arrows==0 should be multiplication
+        let m = base.arrow(0)(&other);
+        assert_eq!(m.to_number(), (&base * &other).to_number());
+
+        // arrows==1 should be power
+        let p = base.arrow(1)(&other);
+        assert_eq!(p.to_number(), base.pow(&other).to_number());
+
+        // arrows==2 should be tetration for small integers
+        let t = base.arrow(2)(&other);
+        assert_eq!(t.to_number(), base.tetrate(&other).to_number());
+    }
+
+    #[test]
+    fn higher_order_pentation_small() {
+        let two = OmegaNum::new(2.0);
+        assert_eq!(two.pentate(&OmegaNum::new(0.0)).to_number(), 1.0);
+        assert_eq!(two.pentate(&OmegaNum::new(1.0)).to_number(), 2.0);
+        assert_eq!(two.pentate(&OmegaNum::new(2.0)).to_number(), 4.0);
+    }
+
+    #[test]
+    fn higher_order_max_arrow_bound() {
+        // Temporarily set small max arrow and ensure large arrow returns Infinity
+        OmegaNum::set_max_arrow(2).expect("set_max_arrow failed");
+        let res = OmegaNum::new(3.0).arrow(3)(&OmegaNum::new(2.0));
+        assert!(res.isinf());
+        OmegaNum::reset_max_arrow();
+    }
 }
