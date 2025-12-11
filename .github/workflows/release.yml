@@ -77,7 +77,7 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: myproject-${{ matrix.target }}-${{ matrix.profile }}
+          name: ${{ matrix.target }}-${{ matrix.profile }}
           path: target/${{ matrix.target }}/release/*, target/${{ matrix.target }}/debug/*
           if-no-files-found: error
 
