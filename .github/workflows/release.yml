@@ -83,6 +83,9 @@ jobs:
 
           srcdir="omeganum/lib/${{ matrix.target }}/${{ matrix.profile }}"
           target="${{ matrix.target }}"
+
+          echo "Copying from build directory: $srcdir"
+          echo "(${{ matrix.target }} ; ${{ matrix.profile }})"
           
           # Determine library filename based on platform
           if [[ "$target" == *"windows"* ]]; then
@@ -105,7 +108,7 @@ jobs:
             find "$srcdir" -type f | head -20
             exit 1
           fi
-          
+
           # echo "Final directory structure:"
           # find "$outdir" -type f
 
