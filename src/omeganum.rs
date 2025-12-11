@@ -456,14 +456,24 @@ impl PartialOrd for OmegaNum {
 
 impl ops::AddAssign<&OmegaNum> for OmegaNum {
     fn add_assign(&mut self, rhs: &OmegaNum) {
-        if self.sign < 0 {
-            (&*self).neg().add_assign(&rhs.neg());
-            self.neg_assign();
-            return
-        }
-        if rhs.sign < 0 {
-            self.sub_assign(&rhs.neg());
-            return
+        // Handle sign combinations explicitly to avoid operating on temporaries
+        if self.sign < 0 && rhs.sign < 0 {
+            let mut x = self.abs();
+            x.add_assign(&rhs.abs());
+            x.neg().clone_into(self);
+            return;
+        } else if self.sign < 0 && rhs.sign >= 0 {
+            // (-a) + b == b - a
+            let mut x = rhs.clone();
+            x.sub_assign(&self.abs());
+            x.clone_into(self);
+            return;
+        } else if rhs.sign < 0 && self.sign >= 0 {
+            // a + (-b) == a - b
+            let mut x = self.clone();
+            x.sub_assign(&rhs.abs());
+            x.clone_into(self);
+            return;
         }
         if *self == OmegaNum::new(0.0) {
             rhs.clone_into(self);
@@ -497,14 +507,25 @@ impl ops::AddAssign<&OmegaNum> for OmegaNum {
 
 impl ops::SubAssign<&OmegaNum> for OmegaNum {
     fn sub_assign(&mut self, rhs: &OmegaNum) {
-        if self.sign < 0 {
-            (&*self).neg().sub_assign(&rhs.neg());
-            self.neg_assign();
-            return
-        }
-        if rhs.sign < 0 {
-            self.add_assign(&rhs.neg());
-            return
+        // Handle sign combinations explicitly
+        if self.sign < 0 && rhs.sign < 0 {
+            // (-a) - (-b) = b - a
+            let mut x = rhs.clone();
+            x.sub_assign(&self.abs());
+            x.clone_into(self);
+            return;
+        } else if self.sign < 0 && rhs.sign >= 0 {
+            // (-a) - b = -(a + b)
+            let mut x = self.abs();
+            x.add_assign(rhs);
+            x.neg().clone_into(self);
+            return;
+        } else if rhs.sign < 0 && self.sign >= 0 {
+            // a - (-b) = a + b
+            let mut x = self.clone();
+            x.add_assign(&rhs.abs());
+            x.clone_into(self);
+            return;
         }
         if self == rhs {
             self.array = vec![0.0];
@@ -1049,6 +1070,7 @@ impl std::fmt::Display for OmegaNum {
 #[cfg(test)]
 mod tests {
     use super::OmegaNum;
+    use super::MAX_SAFE_INTEGER;
 
     #[test]
     fn test_new_and_to_number() {
@@ -1174,5 +1196,47 @@ mod tests {
         assert_eq!(OmegaNum::get_max_arrow().expect("get_max_arrow failed"), 5);
         OmegaNum::reset_max_arrow();
         assert_eq!(OmegaNum::get_max_arrow().expect("get_max_arrow failed"), 1000);
+    }
+
+    #[test]
+    fn robustness_normalize_overflow() {
+        // create an OmegaNum with a first element larger than MAX_SAFE_INTEGER
+        let mut a = OmegaNum { array: vec![MAX_SAFE_INTEGER * 10.0], sign: 1 };
+        a.normalize();
+        assert!(a.array.len() >= 2, "normalize should have created a higher exponent level");
+        assert!(a.array[1] > 0.0, "exponent level should be incremented");
+    }
+
+    #[test]
+    fn robustness_parse_lead_value() {
+        // lead 'ee' should set array[1] to 2
+        let p = OmegaNum::parse("ee2.17e15".to_owned()).expect("parse should succeed");
+        assert!(p.array.len() >= 2 && p.array[1] >= 2.0, "lead-count parse failed: {:?}", p);
+        assert!(!p.isnan());
+    }
+
+    #[test]
+    fn robustness_negative_arithmetic_and_rem() {
+        let a = OmegaNum::new(-5.0);
+        let b = OmegaNum::new(3.0);
+        let sum = &a + &b;
+        assert_eq!(sum.to_number(), -2.0);
+
+        let diff = &b - &a; // 3 - (-5) = 8
+        assert_eq!(diff.to_number(), 8.0);
+
+        let ten = OmegaNum::new(10.0);
+        let three = OmegaNum::new(3.0);
+        let r = &ten % &three;
+        assert_eq!(r.to_number(), 1.0);
+    }
+
+    #[test]
+    fn robustness_pow_negative_exponent() {
+        let two = OmegaNum::new(2.0);
+        let inv = two.pow(&OmegaNum::new(-1.0));
+        let val = inv.to_number();
+        assert!(val.is_finite(), "2^-1 should be finite");
+        assert!((val - 0.5).abs() < 1e-12, "expected 0.5, got {}", val);
     }
 }
