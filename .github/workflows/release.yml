@@ -115,6 +115,7 @@ jobs:
         run: |
           set -e
 
+          ls
           ls *
 
           outdir="target/${{ matrix.target }}/${{ matrix.profile }}"
