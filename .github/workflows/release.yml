@@ -141,7 +141,7 @@ jobs:
             echo "Merging $dir"
             libdir=$(ls "$dir")
             mkdir -p "omeganum/lib/$libdir"
-            cp -r "$dir/$libdir/*" "omeganum/lib/$libdir/" 2>/dev/null || true
+            cp -RT "$dir/$libdir" "omeganum/lib/$libdir" 2>/dev/null || true
           done
 
           echo "Final directory tree:"
