@@ -1,0 +1,15 @@
+[configuration]
+entry_symbol = "gdext_rust_init"
+compatibility_minimum = 4.1
+reloadable = true
+
+[libraries]
+linux.debug.x86_64 =     "res://omeganum/lib/x86_64-unknown-linux-gnu/debug/libomeganum_rs.so"
+linux.release.x86_64 =   "res://omeganum/lib/x86_64-unknoqn-linux-gnu/release/libomeganum_rs.so"
+windows.debug.x86_64 =   "res://omeganum/lib/x86_64-pc-windows-gnu/debug/omeganum_rs.dll"
+windows.release.x86_64 = "res://omeganum/lib/x86_64-pc-windows-gnu/release/omeganum_rs.dll"
+macos.debug =            "res://omeganum/lib/x86_64-apple-darwin/debug/libomeganum_rs.dylib"
+macos.release =          "res://omeganum/lib/x86_64-apple-darwin/release/libomeganum_rs.dylib"
+macos.debug.arm64 =      "res://omeganum/lib/aarch64-apple-darwin/debug/libomeganum_rs.dylib"
+macos.release.arm64 =    "res://omeganum/lib/aarch64-apple-darwin/release/libomeganum_rs.dylib"
+
