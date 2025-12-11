@@ -11,7 +11,6 @@ use std::sync::PoisonError;
 
 use regex::Regex;
 use regex::RegexSet;
-use lazy_static::lazy_static;
 use std::sync::LazyLock;
 use std::sync::Mutex;
 
@@ -31,13 +30,11 @@ const MAX_ARROW_DEFAULT : u64 = 1000;
 static MAX_ARROW: Mutex<u64> = Mutex::new(MAX_ARROW_DEFAULT);
 const MAX_SAFE_INTEGER : f64 = 9007199254740991.0;
 
-lazy_static! {
-    pub static ref MAX_E : f64 = f64::log10(MAX_SAFE_INTEGER);
-    pub static ref E_MAX_SAFE_INTEGER : OmegaNum = OmegaNum { array: vec![MAX_SAFE_INTEGER, 1.0], sign: 1 };
-    pub static ref EE_MAX_SAFE_INTEGER : OmegaNum = OmegaNum { array: vec![MAX_SAFE_INTEGER, 2.0], sign: 1 };
-    pub static ref TETRATED_MAX_SAFE_INTEGER : OmegaNum = OmegaNum { array: vec![1.0, MAX_SAFE_INTEGER], sign: 1 };
-    pub static ref PENTATED_MAX_SAFE_INTEGER : OmegaNum = OmegaNum { array: vec![1.0, 0.0, MAX_SAFE_INTEGER], sign: 1 };
-}
+pub static MAX_E: LazyLock<f64> = LazyLock::new(|| f64::log10(MAX_SAFE_INTEGER));
+pub static E_MAX_SAFE_INTEGER: LazyLock<OmegaNum> = LazyLock::new(|| OmegaNum { array: vec![MAX_SAFE_INTEGER, 1.0], sign: 1 });
+pub static EE_MAX_SAFE_INTEGER: LazyLock<OmegaNum> = LazyLock::new(|| OmegaNum { array: vec![MAX_SAFE_INTEGER, 2.0], sign: 1 });
+pub static TETRATED_MAX_SAFE_INTEGER: LazyLock<OmegaNum> = LazyLock::new(|| OmegaNum { array: vec![1.0, MAX_SAFE_INTEGER], sign: 1 });
+pub static PENTATED_MAX_SAFE_INTEGER: LazyLock<OmegaNum> = LazyLock::new(|| OmegaNum { array: vec![1.0, 0.0, MAX_SAFE_INTEGER], sign: 1 });
 
 
 impl OmegaNum {
