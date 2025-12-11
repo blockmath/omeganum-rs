@@ -1,5 +1,8 @@
 name: Build and Release
 
+permissions:
+  contents: write
+
 on:
   push:
     tags:
@@ -69,15 +72,54 @@ jobs:
           else
             cargo build --target ${{ matrix.target }}
           fi
+      - name: List target directory
+        run: |
+          echo "=== target (${{ matrix.target }} - ${{ matrix.profile }}) ==="
+          find target -maxdepth 4 -type f | sort
+
+      - name: Strip release binaries
+        if: matrix.profile == 'release'
+        shell: bash
+        run: |
+          set -e
+          srcdir="target/${{ matrix.target }}/release"
+
+          echo "Stripping binaries in $srcdir"
+
+          shopt -s nullglob
+          for f in "$srcdir"/*; do
+            # Only strip actual binary files
+            [ -f "$f" ] || continue
+
+            case "${{ matrix.target }}" in
+              *windows-gnu*)
+                echo "Stripping (mingw) $f"
+                x86_64-w64-mingw32-strip "$f" || true
+                ;;
+              *unknown-linux-gnu*)
+                echo "Stripping (linux) $f"
+                strip "$f" || true
+                ;;
+              *apple-darwin*)
+                echo "Stripping (macOS) $f"
+                strip -x "$f" || true
+                ;;
+              *)
+                echo "Unknown platform, not stripping."
+                ;;
+            esac
+          done
 
       - name: Prepare directory structure and copy binaries
         shell: bash
         run: |
           set -e
+
           outdir="omeganum/lib/${{ matrix.target }}/${{ matrix.profile }}"
           mkdir -p "$outdir"
 
           srcdir="target/${{ matrix.target }}/${{ matrix.profile }}"
+
           
           # Determine library filename based on OS and target
           target="${{ matrix.target }}"
@@ -121,7 +163,7 @@ jobs:
     needs: build
 
     steps:
-      - name: Checkout repository to get omeganum/ folder
+      - name: Checkout repository (to get omeganum-rs.gdextension)
         uses: actions/checkout@v4
 
       - name: Download all artifacts
@@ -135,20 +177,17 @@ jobs:
           set -e
           mkdir -p omeganum/lib
 
-          # Each artifact will have the directory structure:
-          # downloaded_artifacts/lib-<target>-<profile>/omeganum/lib/<target>/<profile>/*
           for dir in downloaded_artifacts/*; do
             echo "Merging $dir"
             cp -r "$dir/omeganum/lib/"* omeganum/lib/ 2>/dev/null || true
           done
 
-          echo "Final tree:"
+          echo "Final directory tree:"
           find omeganum -maxdepth 4 -type f
 
       - name: Create final omeganum.zip
         shell: bash
-        run: |
-          zip -r omeganum.zip omeganum
+        run: zip -r omeganum.zip omeganum
 
       - name: Publish Release
         uses: softprops/action-gh-release@v2
