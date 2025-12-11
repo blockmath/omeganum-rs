@@ -118,7 +118,7 @@ jobs:
           outdir="omeganum/libout/${{ matrix.target }}/${{ matrix.profile }}"
           mkdir -p "$outdir"
 
-          srcdir="$omeganum/lib/${{ matrix.target }}/${{ matrix.profile }}"
+          srcdir="omeganum/lib/${{ matrix.target }}/${{ matrix.profile }}"
           target="${{ matrix.target }}"
           
           # Determine library filename based on platform
