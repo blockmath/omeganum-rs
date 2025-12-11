@@ -111,7 +111,14 @@ impl OmegaNum {
     }
 
     #[func]
-    fn new(value: f64) -> Gd<Self> {
+    fn new() -> Gd<Self> {
+        Gd::from_init_fn(|base| {
+            OmegaNum { inner: OmegaNumInner::new(0.0), base }
+        })
+    }
+
+    #[func]
+    fn from_number(value: f64) -> Gd<Self> {
         Gd::from_init_fn(|base| {
             OmegaNum { inner: OmegaNumInner::new(value), base }
         })
