@@ -176,7 +176,9 @@ jobs:
 
           for dir in downloaded_artifacts/*; do
             echo "Merging $dir"
-            find "$dir/" -type d ! \( -iname 'debug' -o -iname 'CACHEDIR.TAG' \) -exec cp -r {} omeganum/lib/ 2>/dev/null || true \;
+            ls "$dir"
+            rm -rf "$dir/debug"
+            cp -r "$dir/*/" omeganum/lib/ 2>/dev/null || true
           done
 
           echo "Final directory tree:"
