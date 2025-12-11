@@ -119,30 +119,27 @@ jobs:
           mkdir -p "$outdir"
 
           srcdir="target/${{ matrix.target }}/${{ matrix.profile }}"
-
-          
-          # Determine library filename based on OS and target
           target="${{ matrix.target }}"
-          profile="${{ matrix.profile }}"
           
-          # Look for library files with common patterns
+          # Determine library filename based on platform
           if [[ "$target" == *"windows"* ]]; then
-            # Windows DLL
-            libfile=$(find "$srcdir" -maxdepth 1 -name "*.dll" | head -1)
+            # Windows DLL - usually omeganum_rs.dll
+            libfile=$(find "$srcdir" -name "*.dll" -type f | head -1)
           elif [[ "$target" == *"darwin"* ]]; then
-            # macOS dylib
-            libfile=$(find "$srcdir" -maxdepth 1 -name "*.dylib" | head -1)
+            # macOS dylib - usually libomeganum_rs.dylib
+            libfile=$(find "$srcdir" -name "*.dylib" -type f | head -1)
           else
-            # Linux and other Unix-like systems use .so
-            libfile=$(find "$srcdir" -maxdepth 1 -name "*.so" | head -1)
+            # Linux and other Unix-like systems use .so - usually libomeganum_rs.so
+            libfile=$(find "$srcdir" -name "*.so" -type f | head -1)
           fi
           
           if [ -n "$libfile" ] && [ -f "$libfile" ]; then
             cp "$libfile" "$outdir/"
             echo "Copied library file: $(basename "$libfile")"
           else
-            echo "Warning: No library file found in $srcdir"
-            ls -la "$srcdir/" || true
+            echo "ERROR: No library file found in $srcdir"
+            echo "Directory contents:"
+            find "$srcdir" -type f | head -20
             exit 1
           fi
           
@@ -179,7 +176,7 @@ jobs:
 
           for dir in downloaded_artifacts/*; do
             echo "Merging $dir"
-            cp -r "$dir/omeganum/lib/"* omeganum/lib/ 2>/dev/null || true
+            find "$dir/" -type d ! \( -iname 'debug' -o -iname 'CACHEDIR.TAG' \) -exec cp -r {} omeganum/lib/ 2>/dev/null || true \;
           done
 
           echo "Final directory tree:"
