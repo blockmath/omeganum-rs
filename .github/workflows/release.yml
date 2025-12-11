@@ -171,9 +171,9 @@ jobs:
           mkdir -p omeganum/lib
 
           for dir in downloaded_artifacts/*; do
-            echo "Merging $dir ; Directory contents:"
-            ls "$dir"
-            cp -r "$dir/*/" omeganum/lib/ 2>/dev/null || true
+            echo "Merging $dir"
+            libdir=$(ls "$dir")
+            cp -r "$dir/$libdir" "omeganum/lib/$libdir" 2>/dev/null || true
           done
 
           echo "Final directory tree:"
