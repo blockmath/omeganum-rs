@@ -72,39 +72,6 @@ jobs:
           else
             cargo build --target ${{ matrix.target }}
           fi
-      
-      - name: Strip release binaries
-        if: matrix.profile == 'release'
-        shell: bash
-        run: |
-          set -e
-          srcdir="target/${{ matrix.target }}/release"
-
-          echo "Stripping binaries in $srcdir"
-
-          shopt -s nullglob
-          for f in "$srcdir"/*; do
-            # Only strip actual binary files
-            [ -f "$f" ] || continue
-
-            case "${{ matrix.target }}" in
-              *windows-gnu*)
-                echo "Stripping (mingw) $f"
-                x86_64-w64-mingw32-strip "$f" || true
-                ;;
-              *unknown-linux-gnu*)
-                echo "Stripping (linux) $f"
-                strip "$f" || true
-                ;;
-              *apple-darwin*)
-                echo "Stripping (macOS) $f"
-                strip -x "$f" || true
-                ;;
-              *)
-                echo "Unknown platform, not stripping."
-                ;;
-            esac
-          done
 
       - name: Prepare directory structure and copy binaries
         shell: bash
