@@ -5,11 +5,10 @@ edition = "2024"
 
 [dependencies]
 godot = { git = "https://github.com/godot-rust/gdext", branch = "master" }
-# lazy_static removed in favor of `std::sync::LazyLock`
 rand = "0.9.2"
 regex = "1.12.2"
 
 [lib]
 name = "omeganum_rs"
 path = "src/lib.rs"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
