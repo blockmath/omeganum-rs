@@ -83,9 +83,6 @@ jobs:
 
           srcdir="omeganum/lib/${{ matrix.target }}/${{ matrix.profile }}"
           target="${{ matrix.target }}"
-
-          echo "Copying from build directory: $srcdir"
-          echo "(${{ matrix.target }} ; ${{ matrix.profile }})"
           
           # Determine library filename based on platform
           if [[ "$target" == *"windows"* ]]; then
@@ -143,7 +140,8 @@ jobs:
           for dir in downloaded_artifacts/*; do
             echo "Merging $dir"
             libdir=$(ls "$dir")
-            cp -r "$dir/$libdir" "omeganum/lib/$libdir" 2>/dev/null || true
+            mkdir -p "omeganum/lib/$libdir"
+            cp -r "$dir/$libdir/*" "omeganum/lib/$libdir/" 2>/dev/null || true
           done
 
           echo "Final directory tree:"
