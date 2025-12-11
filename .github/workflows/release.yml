@@ -115,10 +115,10 @@ jobs:
         run: |
           set -e
 
-          outdir="omeganum/lib/${{ matrix.target }}/${{ matrix.profile }}"
+          outdir="omeganum/libout/${{ matrix.target }}/${{ matrix.profile }}"
           mkdir -p "$outdir"
 
-          srcdir="$outdir"
+          srcdir="$omeganum/lib/${{ matrix.target }}/${{ matrix.profile }}"
           target="${{ matrix.target }}"
           
           # Determine library filename based on platform
@@ -150,7 +150,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: lib-${{ matrix.target }}-${{ matrix.profile }}
-          path: omeganum/lib
+          path: omeganum/libout
           if-no-files-found: error
 
 
