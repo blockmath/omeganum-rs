@@ -1,6 +1,6 @@
 pub mod omeganum;
 
-use std::ops::*;
+use std::{ops::*, str::FromStr};
 
 use godot::prelude::*;
 
@@ -134,6 +134,14 @@ impl OmegaNum {
                 godot_error!("Unable to parse OmegaNum '{}'", str_value.to_string());
                 None
             }
+        }
+    }
+
+    #[func]
+    fn to_string(&self) -> GString {
+        match GString::from_str(&self.inner.to_string()) {
+            Ok(value) => value,
+            Err(_err) => unreachable!()
         }
     }
 
