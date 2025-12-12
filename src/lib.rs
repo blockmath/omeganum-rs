@@ -1,4 +1,5 @@
 pub mod omeganum;
+pub mod hypercalc;
 
 use std::{ops::*, str::FromStr};
 
@@ -58,7 +59,7 @@ impl OmegaNum {
     }
 
     #[func]
-    fn arrow(&self, arrows: u64, other: Gd<Self>) -> Gd<Self> {
+    fn arrow(&self, arrows: i64, other: Gd<Self>) -> Gd<Self> {
         Gd::from_init_fn(|base| {
             OmegaNum { inner: self.inner.arrow(arrows)(&other.bind().inner), base }
         })
@@ -91,7 +92,7 @@ impl OmegaNum {
     }
 
     #[func]
-    fn set_max_arrow(value: u64) {
+    fn set_max_arrow(value: i64) {
         if OmegaNumInner::set_max_arrow(value).is_err() {
             godot_error!("MAX_ARROW could not be set because the mutex is poisoned. You need to call `reset_max_arrow()` first.")
         }
@@ -103,7 +104,7 @@ impl OmegaNum {
     }
 
     #[func]
-    fn get_max_arrow() -> u64 {
+    fn get_max_arrow() -> i64 {
         match OmegaNumInner::get_max_arrow() {
             Ok(value) => value,
             Err(_) => { godot_error!("MAX_ARROW could not be read because the mutex is poisoned. You need to call `reset_max_arrow()` first."); 0 }
@@ -230,7 +231,7 @@ impl OmegaNum {
     }
 
     #[func]
-    fn arrow_ass(&mut self, arrows: u64, other: Gd<Self>) {
+    fn arrow_ass(&mut self, arrows: i64, other: Gd<Self>) {
         self.inner = self.inner.arrow(arrows)(&other.bind().inner);
     }
 
