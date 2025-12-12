@@ -54,7 +54,7 @@ fn test_single(a : &OmegaNum, b : &OmegaNum) {
     println!("{c}");
 }
 
-fn test_oom(max_pow: u64) {
+fn test_oom(max_pow: i64) {
     let mut a = OmegaNum::new(random_range(0.0..10.0));
     let mut b = OmegaNum::new(random_range(0.0..10.0));
 
