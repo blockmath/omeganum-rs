@@ -1,4 +1,5 @@
 pub mod omeganum;
+pub mod hypercalc;
 
 use std::{ops::*, str::FromStr};
 

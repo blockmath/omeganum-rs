@@ -35,6 +35,7 @@ pub static E_MAX_SAFE_INTEGER: LazyLock<OmegaNum> = LazyLock::new(|| OmegaNum { 
 pub static EE_MAX_SAFE_INTEGER: LazyLock<OmegaNum> = LazyLock::new(|| OmegaNum { array: vec![MAX_SAFE_INTEGER, 2.0], sign: 1 });
 pub static TETRATED_MAX_SAFE_INTEGER: LazyLock<OmegaNum> = LazyLock::new(|| OmegaNum { array: vec![1.0, MAX_SAFE_INTEGER], sign: 1 });
 pub static PENTATED_MAX_SAFE_INTEGER: LazyLock<OmegaNum> = LazyLock::new(|| OmegaNum { array: vec![1.0, 0.0, MAX_SAFE_INTEGER], sign: 1 });
+pub static ZERO: LazyLock<OmegaNum> = LazyLock::new(|| OmegaNum::new(0.0));
 
 
 impl OmegaNum {
