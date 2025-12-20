@@ -31,6 +31,25 @@ impl IRefCounted for OmegaNum {
     }
 }
 
+impl OmegaNumInner {
+    fn of_variant(value : Variant) -> Result<OmegaNumInner, String> {
+        if let Ok(value) = value.try_to::<f64>() {
+            Ok(OmegaNumInner::new(value))
+        } else if let Ok(value) = value.try_to::<i64>() {
+            Ok(OmegaNumInner::new(value as f64))
+        } else if let Ok(value) = value.try_to::<f32>() {
+            Ok(OmegaNumInner::new(value as f64))
+        } else if let Ok(value) = value.try_to::<GString>() {
+            match OmegaNumInner::parse(value.to_string()) {
+                Some(value) => Ok(value),
+                None => Err("Unable to parse value".to_owned())
+            }
+        } else {
+            Err("Unsupported type".to_owned())
+        }
+    }
+}
+
 #[godot_api]
 impl OmegaNum {
     #[func]
@@ -331,6 +350,20 @@ impl OmegaNum {
         Gd::from_init_fn(|base| {
             OmegaNum { inner: self.inner.floor(), base }
         })
+    }
+
+    #[func]
+    fn of(value : Variant) -> Option<Gd<Self>> {
+        let inner = OmegaNumInner::of_variant(value);
+        match inner {
+            Ok(inner) => Some(Gd::from_init_fn(|base| {
+                OmegaNum { inner, base }
+            })),
+            Err(err) => {
+                godot_error!("{err}");
+                None
+            }
+        }
     }
 
 }

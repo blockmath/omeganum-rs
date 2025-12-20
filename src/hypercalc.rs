@@ -13,6 +13,8 @@ struct HyperCalcInner {
     registers : HashMap<StringName, OmegaNum>,
     call_stack : Vec<HyperPtr>,
 
+    tables : HashMap<StringName, Vec<OmegaNum>>,
+
     eip : HyperPtr,
     halted : bool,
     code : i64,
@@ -87,6 +89,10 @@ enum HyperInstruction {
     Arrow3(StringName, StringName, StringName),
     Floor(StringName),
 
+    TableLoad(StringName, StringName, usize),
+    TableLoadI(StringName, StringName, StringName),
+    TableStore(StringName, usize, StringName),
+    TableStoreI(StringName, StringName, StringName)
 }
 
 
@@ -98,6 +104,7 @@ impl IRefCounted for HyperCalc {
             inner: Arc::new(Mutex::new(HyperCalcInner {
                 registers: HashMap::new(),
                 call_stack: vec![],
+                tables: HashMap::new(),
                 eip: HyperPtr::new(START_SEGMENT.clone(), 0_usize),
                 halted: true,
                 code: 0_i64,
@@ -124,11 +131,28 @@ impl HyperCalcInner {
 
     fn get_register_mut(&mut self, eax : &StringName) -> &mut OmegaNum {
         if !self.registers.contains_key(eax) { self.registers.insert(eax.clone(), omeganum::ZERO.clone()); }
-        self.registers.get_mut(eax).unwrap_or_else(|| panic!("Register %{eax} could not be added to the registers registry?"))
+        self.registers.get_mut(eax).unwrap_or_else(|| panic!("Register {eax} could not be added to the registers registry?"))
     }
 
     fn gr_mut(&mut self, eax : &StringName) -> &mut OmegaNum {
         self.get_register_mut(eax)
+    }
+
+    fn get_table(&self, tbl : &StringName, i : usize) -> OmegaNum {
+        match self.tables.get(tbl) {
+            Some(table) => match table.get(i) {
+                Some(v) => v.clone(),
+                None => OmegaNum::new(0.0)
+            },
+            None => OmegaNum::new(0.0)
+        }
+    }
+
+    fn get_table_mut(&mut self, tbl : &StringName, i : usize) -> Option<&mut OmegaNum> {
+        match self.tables.get_mut(tbl) {
+            Some(table) => table.get_mut(i),
+            None => None
+        }
     }
 
     fn run_one_instr(&mut self) {
@@ -172,6 +196,11 @@ impl HyperCalcInner {
             Hi::Arrow(dst, src, i) => { let src = self.gr(&src).clone(); *self.gr_mut(&dst) = self.gr_mut(&dst).arrow(i)(&src) },
             Hi::Arrow3(dst, src, i) => { let src = self.gr(&src).clone(); let i = self.gr(&i).to_number() as i64; *self.gr_mut(&dst) = self.gr_mut(&dst).arrow(i)(&src) },
             Hi::Floor(dst) => self.gr_mut(&dst).floor_assign(),
+
+            Hi::TableLoad(dst, tbl, i) => { *self.gr_mut(&dst) = self.get_table(&tbl, i).clone() }
+            Hi::TableLoadI(dst, tbl, edp) => { *self.gr_mut(&dst) = self.get_table(&tbl, self.gr(&edp).to_number() as usize).clone() }
+            Hi::TableStore(tbl, i, src) => { let src = self.gr(&src).clone(); match self.get_table_mut(&tbl, i) { Some(r) => *r = src, None => () } }
+            Hi::TableStoreI(tbl, edp, src) => { let src = self.gr(&src).clone(); match self.get_table_mut(&tbl, self.gr(&edp).to_number() as usize) { Some(r) => *r = src, None => () } }
         }
     }
 
@@ -362,12 +391,55 @@ impl HyperCalc {
                     "floor" => Hi::Floor(
                         (*match args.get(0) { Some(v) => v, None => return format!("Expected a register (line {i})") }).into()
                     ),
+
+                    "lwtable" | "tload" | "ldt" => Hi::TableLoad(
+                        (*match args.get(0) { Some(v) => v, None => return format!("Expected a register (line {i})") }).into(),
+                        (*match args.get(1) { Some(v) => v, None => return format!("Expected a table (line {i})") }).into(),
+                        match (*match args.get(2) { Some(v) => v, None => return format!("Expected a number (line {i})") }).trim_start_matches('#').parse::<usize>() { Ok(v) => v, Err(e) => return format!("Unable to parse number (line {i}): {e}") }
+                    ),
+
+                    "lwtablei" | "tloadi" | "ldi" => Hi::TableLoadI(
+                        (*match args.get(0) { Some(v) => v, None => return format!("Expected a register (line {i})") }).into(),
+                        (*match args.get(1) { Some(v) => v, None => return format!("Expected a table (line {i})") }).into(),
+                        (*match args.get(2) { Some(v) => v, None => return format!("Expected a register (line {i})") }).into()
+                    ),
+
+                    "swtable" | "tstore" | "stt" => Hi::TableStore(
+                        (*match args.get(0) { Some(v) => v, None => return format!("Expected a table (line {i})") }).into(),
+                        match (*match args.get(1) { Some(v) => v, None => return format!("Expected a number (line {i})") }).trim_start_matches('#').parse::<usize>() { Ok(v) => v, Err(e) => return format!("Unable to parse number (line {i}): {e}") },
+                        (*match args.get(2) { Some(v) => v, None => return format!("Expected a register (line {i})") }).into()
+                    ),
+
+                    "swtablei" | "tstorei" | "sti" => Hi::TableStoreI(
+                        (*match args.get(0) { Some(v) => v, None => return format!("Expected a table (line {i})") }).into(),
+                        (*match args.get(1) { Some(v) => v, None => return format!("Expected a register (line {i})") }).into(),
+                        (*match args.get(2) { Some(v) => v, None => return format!("Expected a register (line {i})") }).into()
+                    ),
+
                     _ => return format!("Unknown opcode {opc}")
                 }
             }
         }
 
         inner.program.insert(segment, seg);
+
+        drop(inner);
+
+        "".to_owned()
+    }
+
+    #[func]
+    fn compile_table(&mut self, table_segment: StringName, table: Array<Variant>) -> String {
+        let mut inner = self.inner.lock().expect("Mutex was poisoned, cannot continue");
+        inner.tables.remove(&table_segment);
+        let mut tbl: Vec<OmegaNum> = Vec::with_capacity(table.len());
+        for elem in table.iter_shared() {
+            tbl.push(match OmegaNum::of_variant(elem) {
+                Ok(value) => value,
+                Err(err) => return err
+            });
+        }
+        inner.tables.insert(table_segment, tbl);
 
         drop(inner);
 
@@ -383,5 +455,15 @@ impl HyperCalc {
     #[func]
     fn is_finished(&self) -> bool {
         match &self.thread { Some(v) => v.is_finished(), None => true }
+    }
+
+    #[func]
+    fn await_finished(&mut self) -> i64 {
+        if self.thread.is_some() {
+            std::mem::replace(&mut self.thread, None)
+            .unwrap().join().expect("HyperCalc thread panicked")
+        } else {
+            self.inner.lock().expect("HyperCalc mutex poisoned").code
+        }
     }
 }
