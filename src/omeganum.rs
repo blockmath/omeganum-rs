@@ -26,8 +26,8 @@ pub struct OmegaNum {
 
 const DEBUG_PARSE : bool = false;
 
-const MAX_ARROW_DEFAULT : u64 = 1000;
-static MAX_ARROW: Mutex<u64> = Mutex::new(MAX_ARROW_DEFAULT);
+const MAX_ARROW_DEFAULT : i64 = 1000;
+static MAX_ARROW: Mutex<i64> = Mutex::new(MAX_ARROW_DEFAULT);
 const MAX_SAFE_INTEGER : f64 = 9007199254740991.0;
 
 pub static MAX_E: LazyLock<f64> = LazyLock::new(|| f64::log10(MAX_SAFE_INTEGER));
@@ -159,7 +159,7 @@ impl OmegaNum {
         }
     }
 
-    fn arrow10(arrows: u64, other: &OmegaNum) -> OmegaNum {
+    fn arrow10(arrows: i64, other: &OmegaNum) -> OmegaNum {
         assert_ne!(arrows, 0);
         let mut ret = OmegaNum::new(1.0);
         ret.array = Vec::new();
@@ -169,10 +169,10 @@ impl OmegaNum {
         ret
     }
 
-    pub fn arrow(&self, arrows: u64) -> Box<dyn Fn(&OmegaNum) -> OmegaNum> {
+    pub fn arrow(&self, arrows: i64) -> Box<dyn Fn(&OmegaNum) -> OmegaNum> {
         let t = self.clone();
         
-        if arrows == u64::MAX { Box::new(move |other: &OmegaNum| t.add(other) )}
+        if arrows == -1 { Box::new(move |other: &OmegaNum| t.add(other) )}
         else if arrows == 0 { Box::new(move |other: &OmegaNum| t.mul(other) ) }
         else if arrows == 1 { Box::new(move |other: &OmegaNum| t.pow(other) ) }
         else if arrows == 2 { Box::new(move |other: &OmegaNum| t.tetrate(other) ) }
@@ -180,7 +180,7 @@ impl OmegaNum {
             if other < &OmegaNum::new(0.0) { return OmegaNum::new(f64::NAN) }
             if other == &OmegaNum::new(0.0) { return OmegaNum::new(1.0) }
             if other == &OmegaNum::new(1.0) { return t.clone() }
-            if arrows >= match MAX_ARROW.lock() { Ok(max_arrow) => *max_arrow, Err(_) => u64::MIN } {
+            if arrows >= match MAX_ARROW.lock() { Ok(max_arrow) => *max_arrow, Err(_) => i64::MIN } {
                 eprintln!("Number too large to reasonably handle it: tried to {}-ate.", arrows + 2);
                 return OmegaNum::new(f64::INFINITY)
             }
@@ -252,7 +252,7 @@ impl OmegaNum {
         else { self.array[0] }
     }
 
-    pub fn set_max_arrow(value: u64) -> Result<(), PoisonError<()>> {
+    pub fn set_max_arrow(value: i64) -> Result<(), PoisonError<()>> {
         match MAX_ARROW.lock() {
             Ok(mut max_arrow) => { *max_arrow = value; Ok(()) },
             Err(_) => Err(PoisonError::<()>::new(()))
@@ -266,7 +266,7 @@ impl OmegaNum {
         }
     }
 
-    pub fn get_max_arrow() -> Result<u64, PoisonError<()>> {
+    pub fn get_max_arrow() -> Result<i64, PoisonError<()>> {
         match MAX_ARROW.lock() {
             Ok(max_arrow) => Ok(*max_arrow),
             Err(_) => Err(PoisonError::<()>::new(()))
