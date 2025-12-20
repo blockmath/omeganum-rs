@@ -1,2 +1,8 @@
 target/
 omeganum/lib/
+omeganum.zip
+.cargo/config.toml
+build.sh
+.vscode/settings.json
+.DS_Store
+build.sh
